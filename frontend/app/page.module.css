@@ -1,0 +1,134 @@
+.main {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.header {
+  text-align: center;
+}
+
+.title {
+  font-family: var(--font-serif);
+  font-size: 2.25rem;
+  font-weight: 600;
+  color: var(--ink-text);
+  letter-spacing: 0.02em;
+  margin-bottom: 0.5rem;
+}
+
+.subtitle {
+  color: var(--ink-muted);
+  font-size: 1rem;
+}
+
+.upload {
+  border: 2px dashed var(--ink-border);
+  border-radius: 12px;
+  padding: 3rem 2rem;
+  text-align: center;
+  background: var(--ink-surface);
+  transition: border-color 0.2s, background 0.2s;
+  position: relative;
+}
+
+.upload:hover {
+  border-color: var(--ink-accent-dim);
+}
+
+.uploadDrag {
+  border-color: var(--ink-accent);
+  background: rgba(201, 162, 39, 0.06);
+}
+
+.uploadBusy {
+  pointer-events: none;
+  opacity: 0.9;
+}
+
+.fileInput {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.uploadText {
+  font-size: 1.1rem;
+  color: var(--ink-text);
+  margin-bottom: 0.25rem;
+}
+
+.uploadHint {
+  font-size: 0.9rem;
+  color: var(--ink-muted);
+}
+
+.error {
+  color: #c75c5c;
+  font-size: 0.95rem;
+  text-align: center;
+}
+
+.booksTitle {
+  font-family: var(--font-serif);
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin-bottom: 0.75rem;
+  color: var(--ink-text);
+}
+
+.books {
+  flex: 1;
+}
+
+.muted {
+  color: var(--ink-muted);
+  font-size: 0.95rem;
+}
+
+.bookList {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.bookCard {
+  display: block;
+  padding: 1rem 1.25rem;
+  background: var(--ink-surface);
+  border: 1px solid var(--ink-border);
+  border-radius: 8px;
+  color: var(--ink-text);
+  transition: border-color 0.2s, background 0.2s;
+}
+
+.bookCard:hover {
+  border-color: var(--ink-accent-dim);
+  background: rgba(201, 162, 39, 0.04);
+  text-decoration: none;
+}
+
+.bookTitle {
+  display: block;
+  font-weight: 500;
+  margin-bottom: 0.25rem;
+}
+
+.bookMeta {
+  font-size: 0.85rem;
+  color: var(--ink-muted);
+}
+
+.footer {
+  padding-top: 2rem;
+  border-top: 1px solid var(--ink-border);
+  text-align: center;
+  font-size: 0.85rem;
+  color: var(--ink-muted);
+}

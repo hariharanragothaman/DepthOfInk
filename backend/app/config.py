@@ -1,0 +1,38 @@
+"""Application configuration from environment."""
+from pathlib import Path
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+
+    # API
+    api_title: str = "DepthOfInk"
+    api_version: str = "0.1.0"
+
+    # Paths (relative to backend root or absolute)
+    data_dir: Path = Path("data")
+    uploads_dir: Path = Path("data/uploads")
+    chroma_dir: Path = Path("data/chroma")
+
+    # OpenAI (or compatible API)
+    openai_api_key: str = ""
+    openai_base_url: str | None = None  # e.g. for local/open-source models
+    embedding_model: str = "text-embedding-3-small"
+    chat_model: str = "gpt-4o-mini"
+
+    # RAG
+    chunk_size: int = 800
+    chunk_overlap: int = 150
+    top_k_retrieve: int = 5
+    min_relevance_score: float = 0.0
+
+    def __init__(self, **kwargs) -> None:
+        super().__init__(**kwargs)
+        self.data_dir = self.data_dir.resolve()
+        self.uploads_dir = self.uploads_dir.resolve()
+        self.chroma_dir = self.chroma_dir.resolve()
+
+
+settings = Settings()

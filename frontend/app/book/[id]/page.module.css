@@ -1,0 +1,203 @@
+.main {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 1.5rem;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.header {
+  margin-bottom: 1rem;
+}
+
+.back {
+  display: inline-block;
+  font-size: 0.9rem;
+  color: var(--ink-muted);
+  margin-bottom: 0.75rem;
+}
+
+.back:hover {
+  color: var(--ink-accent);
+  text-decoration: none;
+}
+
+.title {
+  font-family: var(--font-serif);
+  font-size: 1.75rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
+  color: var(--ink-text);
+}
+
+.characterTabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.tab {
+  padding: 0.5rem 1rem;
+  background: var(--ink-surface);
+  border: 1px solid var(--ink-border);
+  border-radius: 6px;
+  color: var(--ink-text);
+  font-size: 0.95rem;
+  transition: border-color 0.2s, background 0.2s;
+}
+
+.tab:hover {
+  border-color: var(--ink-accent-dim);
+}
+
+.tabActive {
+  border-color: var(--ink-accent);
+  background: rgba(201, 162, 39, 0.1);
+  color: var(--ink-accent);
+}
+
+.characterDesc {
+  font-size: 0.95rem;
+  color: var(--ink-muted);
+  margin-bottom: 1.5rem;
+  line-height: 1.5;
+}
+
+.chat {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1rem 0;
+  min-height: 200px;
+}
+
+.hint {
+  color: var(--ink-muted);
+  font-size: 0.95rem;
+  font-style: italic;
+}
+
+.msgUser,
+.msgAssistant {
+  max-width: 90%;
+  align-self: flex-start;
+}
+
+.msgAssistant {
+  align-self: flex-end;
+  background: var(--ink-surface);
+  border: 1px solid var(--ink-border);
+  border-radius: 12px;
+  padding: 1rem 1.25rem;
+}
+
+.msgUser {
+  background: rgba(201, 162, 39, 0.12);
+  border: 1px solid var(--ink-accent-dim);
+  border-radius: 12px;
+  padding: 1rem 1.25rem;
+}
+
+.msgContent {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.citations {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--ink-border);
+  font-size: 0.85rem;
+  color: var(--ink-muted);
+}
+
+.citations summary {
+  cursor: pointer;
+  color: var(--ink-citation);
+}
+
+.citations ul {
+  margin-top: 0.5rem;
+  padding-left: 1.25rem;
+  list-style: none;
+}
+
+.citations li {
+  margin-bottom: 0.5rem;
+  padding-left: 0.5rem;
+  border-left: 2px solid var(--ink-border);
+}
+
+.citePage {
+  display: block;
+  color: var(--ink-citation);
+  font-weight: 500;
+  margin-bottom: 0.25rem;
+}
+
+.citeText {
+  color: var(--ink-text);
+  opacity: 0.9;
+}
+
+.inputWrap {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-end;
+  padding: 1rem 0;
+  border-top: 1px solid var(--ink-border);
+}
+
+.input {
+  flex: 1;
+  padding: 0.75rem 1rem;
+  background: var(--ink-surface);
+  border: 1px solid var(--ink-border);
+  border-radius: 8px;
+  color: var(--ink-text);
+  resize: none;
+  min-height: 48px;
+}
+
+.input:focus {
+  outline: none;
+  border-color: var(--ink-accent-dim);
+}
+
+.input::placeholder {
+  color: var(--ink-muted);
+}
+
+.sendBtn {
+  padding: 0.75rem 1.25rem;
+  background: var(--ink-accent);
+  color: var(--ink-bg);
+  border: none;
+  border-radius: 8px;
+  font-weight: 500;
+  transition: opacity 0.2s, background 0.2s;
+}
+
+.sendBtn:hover:not(:disabled) {
+  background: var(--ink-accent-dim);
+  color: var(--ink-text);
+}
+
+.sendBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.error,
+.errorInline {
+  color: #c75c5c;
+  font-size: 0.9rem;
+  margin-top: 0.5rem;
+}
+
+.error {
+  text-align: center;
+}

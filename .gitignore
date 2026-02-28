@@ -1,3 +1,10 @@
+# DepthOfInk
+backend/data/
+backend/.env
+frontend/.next/
+frontend/node_modules/
+frontend/.env.local
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
@@ -14,7 +21,7 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
+!frontend/lib/
 lib64/
 parts/
 sdist/
