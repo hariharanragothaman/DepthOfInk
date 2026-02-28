@@ -10,18 +10,19 @@
 
 ```bash
 cd backend
-python -m venv .venv
+python3 -m venv .venv
 source .venv/bin/activate   # or .venv\Scripts\activate on Windows
 pip install -r requirements.txt
-cp .env.example .env       # set OPENAI_API_KEY
+cp .env.example .env       # edit .env and set OPENAI_API_KEY=sk-...
+```
+
+Then start the server (venv must be active):
+
+```bash
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-From the project root you can run:
-
-```bash
-cd backend && PYTHONPATH=. uvicorn app.main:app --reload --port 8000
-```
+> **Tip:** If you see `uvicorn: command not found`, make sure you ran `source .venv/bin/activate` first. You can verify with `which uvicorn` -- it should point to `.venv/bin/uvicorn`.
 
 ### 2. Frontend (Next.js)
 
