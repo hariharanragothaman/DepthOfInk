@@ -12,6 +12,9 @@ pdfplumber>=0.10.0
 # Embeddings + LLM
 openai>=1.12.0
 
+# AWS Bedrock (optional: only needed if LLM_PROVIDER=bedrock)
+boto3>=1.34.0
+
 # Vector store
 chromadb>=0.4.22
 

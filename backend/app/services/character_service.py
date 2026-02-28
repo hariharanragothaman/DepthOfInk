@@ -3,10 +3,10 @@ from __future__ import annotations
 
 import json
 import re
-from openai import OpenAI
 
 from app.config import settings
 from app.models.schemas import CharacterInfo
+from app.services.llm_provider import get_provider
 
 
 SYSTEM_EXTRACT = """You are an expert at analyzing narrative text. Given excerpts from a story or book, list the main characters that a reader would want to "talk to" in a chat. Focus on named characters with dialogue or clear presence, not minor walk-ons. Return valid JSON only, no markdown or explanation."""
@@ -30,16 +30,11 @@ def extract_characters(full_text: str, max_chars: int = 12_000) -> list[Characte
     if not text:
         return []
 
-    client = OpenAI(api_key=settings.openai_api_key, base_url=settings.openai_base_url)
-    response = client.chat.completions.create(
-        model=settings.chat_model,
-        messages=[
-            {"role": "system", "content": SYSTEM_EXTRACT},
-            {"role": "user", "content": USER_EXTRACT.format(text=text)},
-        ],
-        temperature=0.2,
-    )
-    raw = (response.choices[0].message.content or "").strip()
+    messages = [
+        {"role": "system", "content": SYSTEM_EXTRACT},
+        {"role": "user", "content": USER_EXTRACT.format(text=text)},
+    ]
+    raw = get_provider().chat(messages, model=settings.chat_model, temperature=0.2)
     raw = _strip_json_block(raw)
 
     try:

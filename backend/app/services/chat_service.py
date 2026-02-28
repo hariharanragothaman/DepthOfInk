@@ -1,10 +1,9 @@
 """Character-mode chat: RAG context + stay-in-character prompt + citations."""
 from __future__ import annotations
 
-from openai import OpenAI
-
 from app.config import settings
 from app.models.schemas import CharacterInfo, ChatMessage
+from app.services.llm_provider import get_provider
 from app.services.rag_service import retrieve
 
 SYSTEM_PREFIX = """You are roleplaying as "{name}" from the story. Stay in character. Use the following context from the book to keep your voice and facts accurate. If the context does not contain relevant information, stay in character but do not invent plot details. You may say you don't recall or keep the reply short and in character.
@@ -54,13 +53,7 @@ def chat(
         messages.append({"role": m.role, "content": m.content})
     messages.append({"role": "user", "content": user_message})
 
-    client = OpenAI(api_key=settings.openai_api_key, base_url=settings.openai_base_url)
-    response = client.chat.completions.create(
-        model=settings.chat_model,
-        messages=messages,
-        temperature=0.7,
-    )
-    content = (response.choices[0].message.content or "").strip()
+    content = get_provider().chat(messages, model=settings.chat_model, temperature=0.7)
     return content, citations
 
 
@@ -81,14 +74,4 @@ def chat_stream(
         messages.append({"role": m.role, "content": m.content})
     messages.append({"role": "user", "content": user_message})
 
-    client = OpenAI(api_key=settings.openai_api_key, base_url=settings.openai_base_url)
-    stream = client.chat.completions.create(
-        model=settings.chat_model,
-        messages=messages,
-        temperature=0.7,
-        stream=True,
-    )
-    for chunk in stream:
-        if chunk.choices and chunk.choices[0].delta.content:
-            yield chunk.choices[0].delta.content
-    yield None  # signal end; caller can attach citations
+    yield from get_provider().chat_stream(messages, model=settings.chat_model, temperature=0.7)

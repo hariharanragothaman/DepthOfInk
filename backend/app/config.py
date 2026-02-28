@@ -16,9 +16,20 @@ class Settings(BaseSettings):
     uploads_dir: Path = Path("data/uploads")
     chroma_dir: Path = Path("data/chroma")
 
-    # OpenAI (or compatible API)
+    # LLM provider: "openai" | "bedrock"
+    # "openai" also works for Ollama and any OpenAI-compatible API
+    llm_provider: str = "openai"
+
+    # OpenAI / OpenAI-compatible settings
     openai_api_key: str = ""
-    openai_base_url: str | None = None  # e.g. for local/open-source models
+    openai_base_url: str | None = None
+
+    # AWS Bedrock settings (used when llm_provider=bedrock)
+    aws_region: str = "us-east-1"
+
+    # Model names (provider-specific)
+    # OpenAI defaults: gpt-4o-mini / text-embedding-3-small
+    # Bedrock examples: us.anthropic.claude-3-5-haiku-20241022-v1:0 / amazon.titan-embed-text-v2:0
     embedding_model: str = "text-embedding-3-small"
     chat_model: str = "gpt-4o-mini"
 

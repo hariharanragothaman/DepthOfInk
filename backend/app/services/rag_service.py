@@ -6,9 +6,9 @@ from typing import Any
 
 import chromadb
 from chromadb.config import Settings as ChromaSettings
-from openai import OpenAI
 
 from app.config import settings
+from app.services.llm_provider import get_provider
 from app.services.pdf_service import TextChunk
 
 
@@ -23,12 +23,7 @@ def get_chroma_client(book_id: str):
 
 
 def get_embedding(text: str) -> list[float]:
-    client = OpenAI(api_key=settings.openai_api_key, base_url=settings.openai_base_url)
-    r = client.embeddings.create(
-        model=settings.embedding_model,
-        input=text[:8000],
-    )
-    return r.data[0].embedding
+    return get_provider().embed(text, model=settings.embedding_model)
 
 
 def create_collection(book_id: str, chunks: list[TextChunk]) -> None:
@@ -45,15 +40,7 @@ def create_collection(book_id: str, chunks: list[TextChunk]) -> None:
     texts = [c.text for c in chunks]
     metadatas = [{"page": c.page, "chunk_index": c.chunk_index} for c in chunks]
 
-    # Batch embed (OpenAI accepts multiple inputs per call)
-    embeddings: list[list[float]] = []
-    batch_size = 50
-    client = OpenAI(api_key=settings.openai_api_key, base_url=settings.openai_base_url)
-    for i in range(0, len(texts), batch_size):
-        batch = texts[i : i + batch_size]
-        r = client.embeddings.create(model=settings.embedding_model, input=batch)
-        batch_embeddings = [d.embedding for d in r.data]
-        embeddings.extend(batch_embeddings)
+    embeddings = get_provider().embed_batch(texts, model=settings.embedding_model)
 
     coll.add(ids=ids, embeddings=embeddings, documents=texts, metadatas=metadatas)
 
