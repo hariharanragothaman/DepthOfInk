@@ -53,6 +53,7 @@ class Settings(BaseSettings):
 
     # Upload limits
     max_upload_size_mb: int = 50
+    max_concurrent_uploads: int = 3
 
     # Chat input limits
     max_message_length: int = 5000

@@ -1,7 +1,9 @@
 """Tests for API endpoints (no LLM or external calls)."""
+import asyncio
 import json
 from pathlib import Path
 
+from app.config import settings
 from app.models.schemas import CharacterInfo
 from app.services.book_store import save_book
 
@@ -119,6 +121,24 @@ class TestBooksEndpoints:
             )
             assert r.status_code == 413
             assert "too large" in r.json()["detail"]
+
+
+class TestConcurrentUploads:
+    def test_rejects_when_semaphore_exhausted(self, client, tmp_data_dir):
+        from unittest.mock import PropertyMock, patch
+        from app.api.routes import books as books_mod
+        original = books_mod._upload_semaphore
+        exhausted = asyncio.Semaphore(0)
+        books_mod._upload_semaphore = exhausted
+        try:
+            r = client.post(
+                "/books/upload",
+                files={"file": ("test.pdf", b"%PDF-1.4 content", "application/pdf")},
+            )
+            assert r.status_code == 429
+            assert "Too many uploads" in r.json()["detail"]
+        finally:
+            books_mod._upload_semaphore = original
 
 
 class TestDeleteBookEndpoint:

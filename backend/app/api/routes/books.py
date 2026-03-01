@@ -1,4 +1,5 @@
 """Book and PDF upload endpoints."""
+import asyncio
 import logging
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -20,6 +21,8 @@ from app.services.rag_service import create_collection
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/books", tags=["books"])
+
+_upload_semaphore = asyncio.Semaphore(settings.max_concurrent_uploads)
 
 def _get_limiter():
     from app.rate_limit import limiter
@@ -43,7 +46,13 @@ def get_book(request: Request, book_id: str):
     return book
 
 
-def _process_book(book_id: str, full_text: str, pages: list[tuple[int, int]], chapters) -> None:
+def _process_book(
+    book_id: str,
+    full_text: str,
+    pages: list[tuple[int, int]],
+    chapters,
+    semaphore: asyncio.Semaphore | None = None,
+) -> None:
     """Background processing: embeddings + character/relationship extraction in parallel."""
     try:
         chunks = chunk_text(
@@ -99,6 +108,9 @@ def _process_book(book_id: str, full_text: str, pages: list[tuple[int, int]], ch
     except Exception as e:
         logger.exception("Background processing failed for book %s", book_id)
         update_book_status(book_id, status="error", error=str(e))
+    finally:
+        if semaphore is not None:
+            semaphore.release()
 
 
 @router.post("/upload", response_model=BookInfo)
@@ -119,50 +131,64 @@ async def upload_pdf(
             detail=f"File too large. Maximum size is {settings.max_upload_size_mb} MB.",
         )
 
-    settings.uploads_dir.mkdir(parents=True, exist_ok=True)
-    book_id = generate_book_id()
-    path = settings.uploads_dir / f"{book_id}.pdf"
+    if _upload_semaphore.locked():
+        raise HTTPException(
+            status_code=429,
+            detail=f"Too many uploads in progress (max {settings.max_concurrent_uploads}). Please try again shortly.",
+        )
+    await _upload_semaphore.acquire()
+
     try:
-        content = await file.read()
-        if len(content) > max_bytes:
-            raise HTTPException(
-                status_code=413,
-                detail=f"File too large. Maximum size is {settings.max_upload_size_mb} MB.",
-            )
-        if not content[:5].startswith(b"%PDF-"):
-            raise HTTPException(
-                status_code=400,
-                detail="File does not appear to be a valid PDF.",
-            )
-        path.write_bytes(content)
-    except HTTPException:
+        settings.uploads_dir.mkdir(parents=True, exist_ok=True)
+        book_id = generate_book_id()
+        path = settings.uploads_dir / f"{book_id}.pdf"
+        try:
+            content = await file.read()
+            if len(content) > max_bytes:
+                raise HTTPException(
+                    status_code=413,
+                    detail=f"File too large. Maximum size is {settings.max_upload_size_mb} MB.",
+                )
+            if not content[:5].startswith(b"%PDF-"):
+                raise HTTPException(
+                    status_code=400,
+                    detail="File does not appear to be a valid PDF.",
+                )
+            path.write_bytes(content)
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to save file: {e}") from e
+
+        try:
+            full_text, pages = extract_text(path)
+        except Exception as e:
+            path.unlink(missing_ok=True)
+            raise HTTPException(status_code=422, detail=f"PDF extraction failed: {str(e)}") from e
+
+        if not full_text.strip():
+            path.unlink(missing_ok=True)
+            raise HTTPException(status_code=422, detail="No text could be extracted from the PDF")
+
+        chapters = detect_chapters(full_text)
+        book_title = title or (file.filename or "Untitled").replace(".pdf", "")
+
+        save_book(book_id, book_title, characters=[], status="processing")
+
+        background_tasks.add_task(
+            _process_book, book_id, full_text, pages, chapters,
+            semaphore=_upload_semaphore,
+        )
+
+        return BookInfo(
+            id=book_id,
+            title=book_title,
+            character_ids=[],
+            status="processing",
+        )
+    except Exception:
+        _upload_semaphore.release()
         raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to save file: {e}") from e
-
-    try:
-        full_text, pages = extract_text(path)
-    except Exception as e:
-        path.unlink(missing_ok=True)
-        raise HTTPException(status_code=422, detail=f"PDF extraction failed: {str(e)}") from e
-
-    if not full_text.strip():
-        path.unlink(missing_ok=True)
-        raise HTTPException(status_code=422, detail="No text could be extracted from the PDF")
-
-    chapters = detect_chapters(full_text)
-    book_title = title or (file.filename or "Untitled").replace(".pdf", "")
-
-    save_book(book_id, book_title, characters=[], status="processing")
-
-    background_tasks.add_task(_process_book, book_id, full_text, pages, chapters)
-
-    return BookInfo(
-        id=book_id,
-        title=book_title,
-        character_ids=[],
-        status="processing",
-    )
 
 
 @router.delete("/{book_id}", status_code=200)
