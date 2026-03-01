@@ -84,6 +84,14 @@ class TestChatRequest:
         )
         assert len(req.history) == 1
 
+    def test_empty_message_rejected(self):
+        with pytest.raises(ValidationError):
+            ChatRequest(book_id="b1", character_id="c1", message="")
+
+    def test_oversized_message_rejected(self):
+        with pytest.raises(ValidationError):
+            ChatRequest(book_id="b1", character_id="c1", message="x" * 5001)
+
 
 class TestChatChunk:
     def test_content_chunk(self):
@@ -126,6 +134,20 @@ class TestGroupChatRequest:
             history=[ChatMessage(role="user", content="Hey")],
         )
         assert len(req.history) == 1
+
+    def test_empty_message_rejected(self):
+        with pytest.raises(ValidationError):
+            GroupChatRequest(book_id="b1", character_ids=["c1"], message="")
+
+    def test_oversized_message_rejected(self):
+        with pytest.raises(ValidationError):
+            GroupChatRequest(book_id="b1", character_ids=["c1"], message="x" * 5001)
+
+
+class TestChatMessageLimits:
+    def test_oversized_content_rejected(self):
+        with pytest.raises(ValidationError):
+            ChatMessage(role="user", content="x" * 10001)
 
 
 class TestGroupChatMessage:

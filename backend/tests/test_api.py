@@ -13,6 +13,46 @@ class TestHealth:
         assert r.json() == {"status": "ok"}
 
 
+class TestCORS:
+    def test_allowed_origin(self, client):
+        r = client.options(
+            "/health",
+            headers={"Origin": "http://localhost:3000", "Access-Control-Request-Method": "GET"},
+        )
+        assert r.headers.get("access-control-allow-origin") == "http://localhost:3000"
+
+    def test_disallowed_origin(self, client):
+        r = client.options(
+            "/health",
+            headers={"Origin": "https://evil.com", "Access-Control-Request-Method": "GET"},
+        )
+        assert r.headers.get("access-control-allow-origin") is None
+
+
+class TestInputSanitization:
+    def test_chat_message_too_long(self, client, tmp_data_dir):
+        r = client.post(
+            "/chat/message",
+            json={
+                "book_id": "b1",
+                "character_id": "c1",
+                "message": "x" * 5001,
+            },
+        )
+        assert r.status_code == 422
+
+    def test_chat_message_empty(self, client, tmp_data_dir):
+        r = client.post(
+            "/chat/message",
+            json={
+                "book_id": "b1",
+                "character_id": "c1",
+                "message": "",
+            },
+        )
+        assert r.status_code == 422
+
+
 class TestBooksEndpoints:
     def test_list_empty(self, client):
         r = client.get("/books")

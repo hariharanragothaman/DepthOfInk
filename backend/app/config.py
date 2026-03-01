@@ -48,8 +48,14 @@ class Settings(BaseSettings):
     max_characters: int = 20
     chars_per_sample: int = 12000
 
+    # CORS (comma-separated origins for production, e.g. "https://myapp.example.com")
+    cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
+
     # Upload limits
     max_upload_size_mb: int = 50
+
+    # Chat input limits
+    max_message_length: int = 5000
 
     # Rate limiting (set RATE_LIMIT_ENABLED=false to disable in dev)
     rate_limit_enabled: bool = True

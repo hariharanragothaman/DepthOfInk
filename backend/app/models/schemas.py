@@ -35,14 +35,14 @@ class CharacterRelationship(BaseModel):
 # --- Chat ---
 class ChatMessage(BaseModel):
     role: str  # "user" | "assistant"
-    content: str
+    content: str = Field(..., max_length=10000)
     citations: list[dict] = Field(default_factory=list)
 
 
 class ChatRequest(BaseModel):
     book_id: str
     character_id: str
-    message: str
+    message: str = Field(..., min_length=1, max_length=5000)
     history: list[ChatMessage] = Field(default_factory=list, max_length=20)
     conversation_id: str | None = None
 
@@ -58,7 +58,7 @@ class ChatChunk(BaseModel):
 class GroupChatRequest(BaseModel):
     book_id: str
     character_ids: list[str]
-    message: str
+    message: str = Field(..., min_length=1, max_length=5000)
     history: list[ChatMessage] = Field(default_factory=list, max_length=100)
 
 
