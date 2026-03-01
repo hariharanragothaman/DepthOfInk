@@ -140,7 +140,7 @@ export default function HomePage() {
       </section>
 
       <footer className={styles.footer}>
-        <p>Phase 2 — memory, reranking, group chat, chapter-aware retrieval.</p>
+        <p>Chat with characters from any storybook PDF.</p>
       </footer>
     </main>
   );
