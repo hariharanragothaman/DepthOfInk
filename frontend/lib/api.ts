@@ -4,6 +4,8 @@ export type BookInfo = {
   id: string;
   title: string;
   character_ids: string[];
+  status?: "processing" | "ready" | "error";
+  error?: string | null;
 };
 
 export type CharacterInfo = {

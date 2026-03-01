@@ -19,10 +19,21 @@ class TestBookInfo:
         b = BookInfo(id="b1", title="Test")
         assert b.id == "b1"
         assert b.character_ids == []
+        assert b.status == "ready"
+        assert b.error is None
 
     def test_with_characters(self):
         b = BookInfo(id="b2", title="Book", character_ids=["c1", "c2"])
         assert len(b.character_ids) == 2
+
+    def test_processing_status(self):
+        b = BookInfo(id="b3", title="Book", status="processing")
+        assert b.status == "processing"
+
+    def test_error_status(self):
+        b = BookInfo(id="b4", title="Book", status="error", error="Something broke")
+        assert b.status == "error"
+        assert b.error == "Something broke"
 
 
 class TestCharacterInfo:

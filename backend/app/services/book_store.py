@@ -18,15 +18,41 @@ def save_book(
     title: str,
     characters: list[CharacterInfo],
     relationships: list[CharacterRelationship] | None = None,
+    status: str = "ready",
 ) -> None:
     path = _meta_path(book_id)
     path.parent.mkdir(parents=True, exist_ok=True)
     data = {
         "id": book_id,
         "title": title,
+        "status": status,
         "characters": [c.model_dump() for c in characters],
         "relationships": [r.model_dump() for r in (relationships or [])],
     }
+    path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+
+
+def update_book_status(
+    book_id: str,
+    status: str,
+    characters: list[CharacterInfo] | None = None,
+    relationships: list[CharacterRelationship] | None = None,
+    error: str | None = None,
+) -> None:
+    """Patch status, characters, and relationships on an existing book record."""
+    path = _meta_path(book_id)
+    if not path.exists():
+        return
+    data = json.loads(path.read_text(encoding="utf-8"))
+    data["status"] = status
+    if characters is not None:
+        data["characters"] = [c.model_dump() for c in characters]
+    if relationships is not None:
+        data["relationships"] = [r.model_dump() for r in relationships]
+    if error is not None:
+        data["error"] = error
+    elif "error" in data:
+        data.pop("error", None)
     path.write_text(json.dumps(data, indent=2), encoding="utf-8")
 
 
@@ -40,6 +66,8 @@ def load_book(book_id: str) -> BookInfo | None:
         id=data["id"],
         title=data.get("title", "Untitled"),
         character_ids=[c.id for c in chars],
+        status=data.get("status", "ready"),
+        error=data.get("error"),
     )
 
 
@@ -53,6 +81,8 @@ def load_book_with_characters(book_id: str) -> tuple[BookInfo | None, list[Chara
         id=data["id"],
         title=data.get("title", "Untitled"),
         character_ids=[c.id for c in chars],
+        status=data.get("status", "ready"),
+        error=data.get("error"),
     )
     return info, chars
 

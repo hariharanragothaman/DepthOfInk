@@ -40,6 +40,14 @@ class TestBooksEndpoints:
         r = client.get("/books/doesnt_exist")
         assert r.status_code == 404
 
+    def test_get_book_with_status(self, client, tmp_data_dir):
+        save_book("book_s", "Status Book", [], status="processing")
+        r = client.get("/books/book_s")
+        assert r.status_code == 200
+        body = r.json()
+        assert body["status"] == "processing"
+        assert body["character_ids"] == []
+
     def test_upload_non_pdf(self, client):
         r = client.post(
             "/books/upload",

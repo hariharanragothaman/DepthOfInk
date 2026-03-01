@@ -1,40 +1,83 @@
-"""Character detection: multi-sample extraction and relationship graph from book text."""
+"""Character detection: multi-sample extraction and relationship graph from book text.
+
+Extraction uses a two-pass approach:
+  Pass 1 (broad) -- sample excerpts across the book (chapter-aware when possible),
+      extract *all* named characters from each excerpt in parallel.
+  Pass 2 (rank & merge) -- LLM merges and ranks the union list, trimming to the
+      configured max_characters limit.
+"""
 from __future__ import annotations
 
 import json
 import logging
 import re
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import TYPE_CHECKING
 
 from app.config import settings
 from app.models.schemas import CharacterInfo, CharacterRelationship
 from app.services.llm_provider import get_provider
 
+if TYPE_CHECKING:
+    from app.services.pdf_service import Chapter
+
 logger = logging.getLogger(__name__)
 
+# ---------------------------------------------------------------------------
+# Prompts
+# ---------------------------------------------------------------------------
 
-SYSTEM_EXTRACT = """You are an expert at analyzing narrative text. Given excerpts from a story or book, list the main characters that a reader would want to "talk to" in a chat. Focus on named characters with dialogue or clear presence, not minor walk-ons. Return valid JSON only, no markdown or explanation."""
+SYSTEM_EXTRACT = (
+    "You are an expert literary analyst. Given an excerpt from a book, "
+    "identify every named character who speaks, acts, or is meaningfully "
+    "referenced. Include protagonists, antagonists, supporting characters, "
+    "and recurring side characters. Omit nameless background figures. "
+    "Return valid JSON only, no markdown or explanation."
+)
 
-USER_EXTRACT = """From this book excerpt, list the main characters (aim for 6-12 for a full novel, fewer for shorter works). For each character provide:
-- name: full or primary name (use their most common name in the story)
-- description: 1-2 sentences about who they are in the story
-- example_quotes: 1-3 short quotes that sound like them (optional but helpful)
+USER_EXTRACT = """List ALL named characters that appear in this excerpt. Do not limit yourself -- include every character who speaks, acts, or is meaningfully mentioned.
+
+For each character provide:
+- name: the character's most common name in the text
+- description: 1-2 sentences about who they are
+- example_quotes: 1-3 short quotes in their voice (empty array if none found)
 
 Excerpt:
 ---
 {text}
 ---
 
-Return a JSON object with key "characters" and value an array of objects with keys: name, description, example_quotes (array of strings)."""
+Return a JSON object with key "characters" containing an array of objects with keys: name, description, example_quotes."""
 
-SYSTEM_MERGE = """You are an expert at analyzing characters from a novel. You will receive multiple lists of characters extracted from different parts of a book. Merge them into a single deduplicated list of the most important characters. Characters may appear under slightly different names (e.g. "Harry" vs "Harry Potter") -- unify them. Keep the best description and quotes from any source. Return valid JSON only."""
+SYSTEM_MERGE = (
+    "You are an expert at analyzing characters from a novel. You will receive "
+    "multiple character lists extracted from different parts of a book. Merge "
+    "them into a single deduplicated and ranked list. Characters may appear "
+    "under slightly different names (e.g. 'Harry' vs 'Harry Potter') -- unify "
+    "them under their most recognizable name. Keep the best description and "
+    "quotes from any source. Return valid JSON only."
+)
 
-USER_MERGE = """Here are character lists extracted from different parts of the book. Merge them into one deduplicated list of the {max_chars} most important characters. Prefer characters with dialogue, plot significance, or strong presence.
+USER_MERGE = """Here are character lists extracted from different parts of the book:
 
 {lists_json}
 
-Return a JSON object with key "characters" and value an array of objects with keys: name, description, example_quotes (array of strings)."""
+Merge and deduplicate these into a single ranked list of the top {max_chars} most important characters. Rank by:
+1. Plot significance and screen time
+2. Amount of dialogue
+3. Emotional impact on the story
+4. How interesting they would be to "chat with"
 
-SYSTEM_RELATIONSHIPS = """You are an expert at analyzing character relationships in narrative fiction. Given a list of characters from a book and excerpts from the text, identify the key relationships between characters. Return valid JSON only, no markdown or explanation."""
+Include characters who only appear in one excerpt if they are plot-significant.
+
+Return a JSON object with key "characters" containing an array of objects with keys: name, description, example_quotes (array of strings). Order from most to least important."""
+
+SYSTEM_RELATIONSHIPS = (
+    "You are an expert at analyzing character relationships in narrative "
+    "fiction. Given a list of characters from a book and excerpts from the "
+    "text, identify the key relationships between characters. Return valid "
+    "JSON only, no markdown or explanation."
+)
 
 USER_RELATIONSHIPS = """Given these characters from a book:
 {characters_json}
@@ -51,35 +94,100 @@ Identify the important relationships between characters. For each relationship p
 Return a JSON object with key "relationships" and value an array of objects with keys: source, target, relationship, description. Include only meaningful relationships, not every possible pair. Aim for 5-15 relationships."""
 
 
-def _sample_excerpts(full_text: str, num_samples: int = 3, chars_per_sample: int = 6000) -> list[str]:
-    """Sample excerpts from beginning, middle, and end of the text."""
+# ---------------------------------------------------------------------------
+# Sampling
+# ---------------------------------------------------------------------------
+
+def _compute_num_samples(text_len: int) -> int:
+    """Scale sample count with book length for better character coverage."""
+    if text_len < 15_000:
+        return 1
+    if text_len < 50_000:
+        return 3
+    if text_len < 100_000:
+        return 5
+    if text_len < 500_000:
+        return 7
+    return 10
+
+
+def _sample_excerpts_positional(
+    full_text: str,
+    num_samples: int,
+    chars_per_sample: int,
+) -> list[str]:
+    """Evenly-spaced positional sampling as fallback."""
     text_len = len(full_text)
     if text_len <= chars_per_sample * 2:
         return [full_text]
-
-    excerpts = []
     if num_samples == 1:
         return [full_text[:chars_per_sample]]
 
-    positions = [0]
-    if num_samples >= 2:
-        positions.append(text_len // 2 - chars_per_sample // 2)
-    if num_samples >= 3:
-        positions.append(max(0, text_len - chars_per_sample))
-    for extra in range(3, num_samples):
-        frac = extra / num_samples
-        positions.append(int(text_len * frac) - chars_per_sample // 2)
-
-    for pos in positions:
-        start = max(0, pos)
+    excerpts: list[str] = []
+    for i in range(num_samples):
+        frac = i / max(num_samples - 1, 1)
+        center = int(text_len * frac)
+        start = max(0, center - chars_per_sample // 2)
         end = min(text_len, start + chars_per_sample)
+        start = max(0, end - chars_per_sample)
+        excerpts.append(full_text[start:end])
+    return excerpts
+
+
+def _sample_excerpts_by_chapter(
+    full_text: str,
+    chapters: list[Chapter],
+    num_samples: int,
+    chars_per_sample: int,
+) -> list[str]:
+    """Sample one excerpt per selected chapter for maximum coverage.
+    Picks chapters evenly spaced across the book."""
+    if not chapters or len(chapters) < 2:
+        return _sample_excerpts_positional(full_text, num_samples, chars_per_sample)
+
+    step = max(1, len(chapters) // num_samples)
+    selected = chapters[::step][:num_samples]
+
+    if len(selected) < num_samples:
+        remaining = [c for c in chapters if c not in selected]
+        for c in remaining:
+            if len(selected) >= num_samples:
+                break
+            selected.append(c)
+        selected.sort(key=lambda c: c.start_char)
+
+    excerpts: list[str] = []
+    for ch in selected:
+        start = ch.start_char
+        end = min(ch.end_char + 1, start + chars_per_sample, len(full_text))
+        if end - start < chars_per_sample and start > 0:
+            start = max(0, end - chars_per_sample)
         excerpts.append(full_text[start:end])
 
     return excerpts
 
 
+def _sample_excerpts(
+    full_text: str,
+    num_samples: int | None = None,
+    chars_per_sample: int | None = None,
+    chapters: list[Chapter] | None = None,
+) -> list[str]:
+    """Sample excerpts using chapter-aware strategy when possible."""
+    n = num_samples or _compute_num_samples(len(full_text))
+    cps = chars_per_sample or settings.chars_per_sample
+
+    if chapters and len(chapters) >= 3:
+        return _sample_excerpts_by_chapter(full_text, chapters, n, cps)
+    return _sample_excerpts_positional(full_text, n, cps)
+
+
+# ---------------------------------------------------------------------------
+# Extraction helpers
+# ---------------------------------------------------------------------------
+
 def _extract_from_excerpt(text: str) -> list[dict]:
-    """Extract characters from a single excerpt via LLM."""
+    """Extract characters from a single excerpt via LLM (pass 1 -- broad)."""
     messages = [
         {"role": "system", "content": SYSTEM_EXTRACT},
         {"role": "user", "content": USER_EXTRACT.format(text=text)},
@@ -93,8 +201,8 @@ def _extract_from_excerpt(text: str) -> list[dict]:
     return chars
 
 
-def _merge_character_lists(all_lists: list[list[dict]], max_chars: int = 12) -> list[dict]:
-    """Use LLM to merge and deduplicate character lists from multiple excerpts."""
+def _merge_character_lists(all_lists: list[list[dict]], max_chars: int) -> list[dict]:
+    """Pass 2 -- LLM merges, deduplicates, and ranks all discovered characters."""
     if len(all_lists) == 1:
         return all_lists[0]
 
@@ -115,39 +223,8 @@ def _merge_character_lists(all_lists: list[list[dict]], max_chars: int = 12) -> 
     return chars
 
 
-def extract_characters(full_text: str, max_chars: int = 12) -> list[CharacterInfo]:
-    """Extract characters by sampling multiple points in the book and merging results."""
-    if not full_text.strip():
-        return []
-
-    text_len = len(full_text)
-    if text_len < 15_000:
-        num_samples = 1
-    elif text_len < 50_000:
-        num_samples = 2
-    else:
-        num_samples = 3
-
-    excerpts = _sample_excerpts(full_text, num_samples=num_samples)
-
-    all_lists: list[list[dict]] = []
-    for excerpt in excerpts:
-        try:
-            chars = _extract_from_excerpt(excerpt)
-            all_lists.append(chars)
-        except (json.JSONDecodeError, TypeError) as e:
-            logger.warning("Character extraction from excerpt failed: %s", e)
-            continue
-
-    if not all_lists:
-        raise ValueError("All character extraction attempts failed")
-
-    try:
-        merged = _merge_character_lists(all_lists, max_chars=max_chars)
-    except (json.JSONDecodeError, TypeError) as e:
-        logger.warning("Merge failed, using first list: %s", e)
-        merged = all_lists[0]
-
+def _parse_characters(merged: list[dict], max_chars: int) -> list[CharacterInfo]:
+    """Convert raw LLM output dicts to CharacterInfo objects."""
     out: list[CharacterInfo] = []
     for i, c in enumerate(merged[:max_chars]):
         name = (c.get("name") or c.get("title") or "Unknown").strip()
@@ -169,9 +246,76 @@ def extract_characters(full_text: str, max_chars: int = 12) -> list[CharacterInf
     return out
 
 
+# ---------------------------------------------------------------------------
+# Main extraction
+# ---------------------------------------------------------------------------
+
+def extract_characters(
+    full_text: str,
+    max_chars: int | None = None,
+    chapters: list[Chapter] | None = None,
+) -> list[CharacterInfo]:
+    """Two-pass character extraction with chapter-aware sampling.
+
+    Pass 1: Sample excerpts across the book and extract ALL named characters
+            from each excerpt in parallel (broad recall).
+    Pass 2: LLM merges, deduplicates, and ranks the union list, trimming to
+            the top max_chars characters.
+    """
+    if not full_text.strip():
+        return []
+
+    mc = max_chars or settings.max_characters
+
+    excerpts = _sample_excerpts(full_text, chapters=chapters)
+    logger.info("Character extraction: %d excerpts of ~%d chars from %d-char text",
+                len(excerpts), settings.chars_per_sample, len(full_text))
+
+    all_lists: list[list[dict]] = []
+    if len(excerpts) == 1:
+        try:
+            all_lists.append(_extract_from_excerpt(excerpts[0]))
+        except (json.JSONDecodeError, TypeError) as e:
+            logger.warning("Character extraction from excerpt failed: %s", e)
+    else:
+        with ThreadPoolExecutor(max_workers=min(len(excerpts), 8)) as pool:
+            futures = {
+                pool.submit(_extract_from_excerpt, ex): i
+                for i, ex in enumerate(excerpts)
+            }
+            for future in as_completed(futures):
+                try:
+                    result = future.result()
+                    all_lists.append(result)
+                except Exception as e:
+                    logger.warning("Character extraction from excerpt failed: %s", e)
+
+    if not all_lists:
+        raise ValueError("All character extraction attempts failed")
+
+    total_raw = sum(len(lst) for lst in all_lists)
+    logger.info("Pass 1 found %d raw character entries across %d excerpts",
+                total_raw, len(all_lists))
+
+    try:
+        merged = _merge_character_lists(all_lists, max_chars=mc)
+    except (json.JSONDecodeError, TypeError) as e:
+        logger.warning("Merge failed, using first list: %s", e)
+        merged = all_lists[0]
+
+    result = _parse_characters(merged, mc)
+    logger.info("Pass 2 merged to %d final characters", len(result))
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Relationship extraction
+# ---------------------------------------------------------------------------
+
 def extract_relationships(
     full_text: str,
     characters: list[CharacterInfo],
+    chapters: list[Chapter] | None = None,
 ) -> list[CharacterRelationship]:
     """Extract relationships between characters using LLM."""
     if len(characters) < 2:
@@ -182,7 +326,9 @@ def extract_relationships(
         indent=2,
     )
 
-    excerpts = _sample_excerpts(full_text, num_samples=3, chars_per_sample=4000)
+    excerpts = _sample_excerpts(
+        full_text, num_samples=5, chars_per_sample=4000, chapters=chapters,
+    )
     text = "\n\n---\n\n".join(excerpts)
 
     messages = [
@@ -200,7 +346,6 @@ def extract_relationships(
     if not isinstance(rels_raw, list):
         rels_raw = [rels_raw]
 
-    char_names = {c.name.lower() for c in characters}
     name_to_id = {c.name.lower(): c.id for c in characters}
 
     out: list[CharacterRelationship] = []
@@ -225,6 +370,10 @@ def extract_relationships(
         ))
     return out
 
+
+# ---------------------------------------------------------------------------
+# Utilities
+# ---------------------------------------------------------------------------
 
 def _strip_json_block(s: str) -> str:
     s = s.strip()

@@ -12,6 +12,8 @@ class BookInfo(BaseModel):
     id: str
     title: str
     character_ids: list[str] = Field(default_factory=list)
+    status: str = "ready"  # "processing" | "ready" | "error"
+    error: str | None = None
 
 
 class CharacterInfo(BaseModel):

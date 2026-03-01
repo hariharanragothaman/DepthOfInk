@@ -44,6 +44,10 @@ class Settings(BaseSettings):
     rerank_initial_k: int = 15
     rerank_final_k: int = 5
 
+    # Character extraction
+    max_characters: int = 20
+    chars_per_sample: int = 12000
+
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
         self.data_dir = self.data_dir.resolve()

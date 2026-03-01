@@ -1,13 +1,17 @@
 """Book and PDF upload endpoints."""
 import logging
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from fastapi import APIRouter, File, HTTPException, UploadFile
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, BackgroundTasks, File, HTTPException, UploadFile
 
 from app.config import settings
 from app.models.schemas import BookInfo, CharacterInfo, CharacterRelationship
-from app.services.book_store import save_book, load_relationships, save_relationships
+from app.services.book_store import (
+    load_relationships,
+    save_book,
+    update_book_status,
+)
 from app.services.character_service import extract_characters, extract_relationships
 from app.services.pdf_service import chunk_text, detect_chapters, extract_text, generate_book_id
 from app.services.rag_service import create_collection
@@ -32,8 +36,67 @@ def get_book(book_id: str):
     return book
 
 
+def _process_book(book_id: str, full_text: str, pages: list[tuple[int, int]], chapters) -> None:
+    """Background processing: embeddings + character/relationship extraction in parallel."""
+    try:
+        chunks = chunk_text(
+            full_text,
+            pages,
+            chunk_size=settings.chunk_size,
+            chunk_overlap=settings.chunk_overlap,
+            chapters=chapters if chapters else None,
+        )
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            embed_future = pool.submit(create_collection, book_id, chunks)
+            char_future = pool.submit(
+                extract_characters, full_text,
+                None, chapters if chapters else None,
+            )
+
+            embed_future.result()
+
+            try:
+                characters = char_future.result()
+            except Exception as e:
+                characters = []
+                logger.warning("Character extraction failed: %s", e)
+
+        if not characters:
+            characters = [
+                CharacterInfo(
+                    id="char_0_narrator",
+                    name="Narrator",
+                    description="The voice of the story.",
+                    example_quotes=[],
+                )
+            ]
+
+        relationships: list[CharacterRelationship] = []
+        if len(characters) >= 2:
+            try:
+                relationships = extract_relationships(
+                    full_text, characters, chapters if chapters else None,
+                )
+            except Exception as e:
+                logger.warning("Relationship extraction failed: %s", e)
+
+        update_book_status(
+            book_id,
+            status="ready",
+            characters=characters,
+            relationships=relationships,
+        )
+        logger.info("Book %s processing complete: %d characters, %d relationships",
+                     book_id, len(characters), len(relationships))
+    except Exception as e:
+        logger.exception("Background processing failed for book %s", book_id)
+        update_book_status(book_id, status="error", error=str(e))
+
+
 @router.post("/upload", response_model=BookInfo)
 async def upload_pdf(
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     title: str | None = None,
 ):
@@ -59,45 +122,17 @@ async def upload_pdf(
         raise HTTPException(status_code=422, detail="No text could be extracted from the PDF")
 
     chapters = detect_chapters(full_text)
-    chunks = chunk_text(
-        full_text,
-        pages,
-        chunk_size=settings.chunk_size,
-        chunk_overlap=settings.chunk_overlap,
-        chapters=chapters if chapters else None,
-    )
-    create_collection(book_id, chunks)
-
-    try:
-        characters = extract_characters(full_text)
-    except Exception as e:
-        characters = []
-        logger.warning("Character extraction failed: %s", e)
-
-    if not characters:
-        characters = [
-            CharacterInfo(
-                id="char_0_narrator",
-                name="Narrator",
-                description="The voice of the story.",
-                example_quotes=[],
-            )
-        ]
-
-    relationships: list[CharacterRelationship] = []
-    if len(characters) >= 2:
-        try:
-            relationships = extract_relationships(full_text, characters)
-        except Exception as e:
-            logger.warning("Relationship extraction failed: %s", e)
-
     book_title = title or (file.filename or "Untitled").replace(".pdf", "")
-    save_book(book_id, book_title, characters, relationships)
+
+    save_book(book_id, book_title, characters=[], status="processing")
+
+    background_tasks.add_task(_process_book, book_id, full_text, pages, chapters)
 
     return BookInfo(
         id=book_id,
         title=book_title,
-        character_ids=[c.id for c in characters],
+        character_ids=[],
+        status="processing",
     )
 
 

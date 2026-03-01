@@ -44,19 +44,37 @@ export default function BookPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  useEffect(() => {
+  const fetchBookData = useCallback(async (isInitial = false) => {
     if (!bookId) return;
-    setLoadingBook(true);
-    Promise.all([getBook(bookId), listCharacters(bookId), getRelationships(bookId)])
-      .then(([b, chars, rels]) => {
-        setBook(b);
+    if (isInitial) setLoadingBook(true);
+    try {
+      const b = await getBook(bookId);
+      setBook(b);
+      if (b.status === "ready") {
+        const [chars, rels] = await Promise.all([
+          listCharacters(bookId),
+          getRelationships(bookId),
+        ]);
         setCharacters(chars);
         setRelationships(rels);
         if (chars.length && !selectedId) setSelectedId(chars[0].id);
-      })
-      .catch(() => setError("Book not found"))
-      .finally(() => setLoadingBook(false));
+      }
+    } catch {
+      setError("Book not found");
+    } finally {
+      if (isInitial) setLoadingBook(false);
+    }
   }, [bookId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    fetchBookData(true);
+  }, [fetchBookData]);
+
+  useEffect(() => {
+    if (!book || book.status !== "processing") return;
+    const interval = setInterval(() => fetchBookData(false), 3000);
+    return () => clearInterval(interval);
+  }, [book?.status, fetchBookData]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!bookId || !selectedId || groupMode) return;
@@ -250,6 +268,37 @@ export default function BookPage() {
         <Link href="/" className={styles.back}>
           &larr; Back
         </Link>
+      </main>
+    );
+  }
+
+  if (book?.status === "processing") {
+    return (
+      <main className={styles.main}>
+        <header className={styles.header}>
+          <Link href="/" className={styles.back}>&larr; Books</Link>
+          <h1 className={styles.title}>{book.title}</h1>
+        </header>
+        <div className={styles.processingWrap}>
+          <div className={styles.processingSpinner} />
+          <h2 className={styles.processingTitle}>Analyzing your book...</h2>
+          <p className={styles.processingDesc}>
+            Extracting characters, building embeddings, and mapping relationships.
+            This usually takes 30-60 seconds.
+          </p>
+        </div>
+      </main>
+    );
+  }
+
+  if (book?.status === "error") {
+    return (
+      <main className={styles.main}>
+        <header className={styles.header}>
+          <Link href="/" className={styles.back}>&larr; Books</Link>
+          <h1 className={styles.title}>{book.title}</h1>
+        </header>
+        <p className={styles.error}>Processing failed: {book.error || "Unknown error"}</p>
       </main>
     );
   }

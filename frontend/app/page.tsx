@@ -42,10 +42,9 @@ export default function HomePage() {
       setUploadStage("Uploading PDF...");
       setError(null);
       try {
-        setUploadStage("Extracting text and characters...");
         const book = await uploadPdf(file, undefined);
         setBooks((prev) => [book, ...prev]);
-        setUploadStage("Done! Redirecting...");
+        setUploadStage("Redirecting...");
         router.push(`/book/${book.id}`);
       } catch (e) {
         setError(e instanceof Error ? e.message : "Upload failed");
@@ -131,7 +130,15 @@ export default function HomePage() {
               <li key={b.id}>
                 <Link href={`/book/${b.id}`} className={styles.bookCard}>
                   <span className={styles.bookTitle}>{b.title}</span>
-                  <span className={styles.bookMeta}>{b.character_ids.length} characters</span>
+                  <span className={styles.bookMeta}>
+                    {b.status === "processing" ? (
+                      <span className={styles.processingBadge}>Processing...</span>
+                    ) : b.status === "error" ? (
+                      <span className={styles.errorBadge}>Error</span>
+                    ) : (
+                      `${b.character_ids.length} characters`
+                    )}
+                  </span>
                 </Link>
               </li>
             ))}

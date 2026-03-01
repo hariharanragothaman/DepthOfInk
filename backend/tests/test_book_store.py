@@ -9,6 +9,7 @@ from app.services.book_store import (
     load_book,
     load_book_with_characters,
     save_book,
+    update_book_status,
 )
 
 
@@ -69,3 +70,32 @@ class TestGetCharacter:
 
     def test_wrong_book(self, tmp_data_dir):
         assert get_character("book_doesnt_exist", "c1") is None
+
+
+class TestUpdateBookStatus:
+    def test_update_to_ready_with_characters(self, tmp_data_dir):
+        save_book("book_proc", "Processing Book", [], status="processing")
+        book = load_book("book_proc")
+        assert book.status == "processing"
+        assert book.character_ids == []
+
+        chars = [CharacterInfo(id="c1", name="Alice")]
+        update_book_status("book_proc", "ready", characters=chars)
+        book = load_book("book_proc")
+        assert book.status == "ready"
+        assert "c1" in book.character_ids
+
+    def test_update_to_error(self, tmp_data_dir):
+        save_book("book_err", "Error Book", [], status="processing")
+        update_book_status("book_err", "error", error="LLM failed")
+        book = load_book("book_err")
+        assert book.status == "error"
+        assert book.error == "LLM failed"
+
+    def test_update_nonexistent_does_nothing(self, tmp_data_dir):
+        update_book_status("nope", "ready")
+
+    def test_save_with_processing_status(self, tmp_data_dir):
+        save_book("book_ps", "Test", [], status="processing")
+        book = load_book("book_ps")
+        assert book.status == "processing"

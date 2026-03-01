@@ -158,6 +158,33 @@
   50% { opacity: 1; }
 }
 
+.processingBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+  color: var(--ink-accent);
+  font-weight: 500;
+}
+
+.processingBadge::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ink-accent);
+  animation: pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
+}
+
+.errorBadge {
+  color: #c75c5c;
+  font-weight: 500;
+}
+
 .footer {
   padding-top: 2rem;
   border-top: 1px solid var(--ink-border);
