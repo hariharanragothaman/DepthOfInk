@@ -10,12 +10,15 @@ import {
   streamGroupChat,
   getConversationHistory,
   clearConversationHistory,
+  getRelationships,
   type BookInfo,
   type CharacterInfo,
+  type CharacterRelationship,
   type ChatMessage,
 } from "@/lib/api";
 import ChatBubble from "./components/ChatBubble";
 import CharacterTabs from "./components/CharacterTabs";
+import RelationshipGraph from "./components/RelationshipGraph";
 import styles from "./page.module.css";
 
 type DisplayMessage = ChatMessage & {
@@ -35,6 +38,8 @@ export default function BookPage() {
   const [error, setError] = useState<string | null>(null);
   const [loadingBook, setLoadingBook] = useState(true);
   const [groupMode, setGroupMode] = useState(false);
+  const [showGraph, setShowGraph] = useState(false);
+  const [relationships, setRelationships] = useState<CharacterRelationship[]>([]);
   const [hasMemory, setHasMemory] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -42,10 +47,11 @@ export default function BookPage() {
   useEffect(() => {
     if (!bookId) return;
     setLoadingBook(true);
-    Promise.all([getBook(bookId), listCharacters(bookId)])
-      .then(([b, chars]) => {
+    Promise.all([getBook(bookId), listCharacters(bookId), getRelationships(bookId)])
+      .then(([b, chars, rels]) => {
         setBook(b);
         setCharacters(chars);
+        setRelationships(rels);
         if (chars.length && !selectedId) setSelectedId(chars[0].id);
       })
       .catch(() => setError("Book not found"))
@@ -259,18 +265,27 @@ export default function BookPage() {
         <div className={styles.modeToggle}>
           <button
             type="button"
-            className={`${styles.modeBtn} ${!groupMode ? styles.modeBtnActive : ""}`}
-            onClick={() => { setGroupMode(false); setMessages([]); }}
+            className={`${styles.modeBtn} ${!groupMode && !showGraph ? styles.modeBtnActive : ""}`}
+            onClick={() => { setGroupMode(false); setShowGraph(false); setMessages([]); }}
           >
             Single Character
           </button>
           <button
             type="button"
             className={`${styles.modeBtn} ${groupMode ? styles.modeBtnActive : ""}`}
-            onClick={() => { setGroupMode(true); setMessages([]); }}
+            onClick={() => { setGroupMode(true); setShowGraph(false); setMessages([]); }}
           >
             Group Chat
           </button>
+          {relationships.length > 0 && (
+            <button
+              type="button"
+              className={`${styles.modeBtn} ${showGraph ? styles.modeBtnActive : ""}`}
+              onClick={() => { setShowGraph(!showGraph); }}
+            >
+              Relationships
+            </button>
+          )}
         </div>
 
         {!groupMode && (
@@ -303,57 +318,68 @@ export default function BookPage() {
         </div>
       )}
 
-      {groupMode && (
+      {groupMode && !showGraph && (
         <p className={styles.characterDesc}>
           All {characters.length} characters will respond to your messages in turn.
         </p>
       )}
 
-      <div className={styles.chat}>
-        {messages.length === 0 && (
-          <p className={styles.hint}>
-            {groupMode
-              ? "Say something to all characters\u2026"
-              : `Say something to ${selected?.name ?? "the character"}\u2026`}
-          </p>
-        )}
-        {messages.map((m, i) => (
-          <ChatBubble
-            key={i}
-            role={m.role}
-            content={m.content}
-            citations={m.citations}
-            characterName={m.character_name}
-            characterColorIdx={m.character_id ? idxMap[m.character_id] : undefined}
-          />
-        ))}
-        <div ref={messagesEndRef} />
-      </div>
-
-      <div className={styles.inputWrap}>
-        <textarea
-          ref={inputRef}
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={onKeyDown}
-          placeholder={
-            groupMode
-              ? "Message all characters\u2026"
-              : `Message ${selected?.name ?? "character"}\u2026`
-          }
-          className={styles.input}
-          rows={2}
-          disabled={streaming}
+      {showGraph && (
+        <RelationshipGraph
+          characters={characters}
+          relationships={relationships}
         />
-        <button
-          type="button"
-          onClick={send}
-          disabled={!input.trim() || streaming}
-          className={styles.sendBtn}
-        >
-          {streaming ? "..." : "Send"}
-        </button>
-      </div>
+      )}
+
+      {!showGraph && (
+        <>
+          <div className={styles.chat}>
+            {messages.length === 0 && (
+              <p className={styles.hint}>
+                {groupMode
+                  ? "Say something to all characters\u2026"
+                  : `Say something to ${selected?.name ?? "the character"}\u2026`}
+              </p>
+            )}
+            {messages.map((m, i) => (
+              <ChatBubble
+                key={i}
+                role={m.role}
+                content={m.content}
+                citations={m.citations}
+                characterName={m.character_name}
+                characterColorIdx={m.character_id ? idxMap[m.character_id] : undefined}
+              />
+            ))}
+            <div ref={messagesEndRef} />
+          </div>
+
+          <div className={styles.inputWrap}>
+            <textarea
+              ref={inputRef}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={onKeyDown}
+              placeholder={
+                groupMode
+                  ? "Message all characters\u2026"
+                  : `Message ${selected?.name ?? "character"}\u2026`
+              }
+              className={styles.input}
+              rows={2}
+              disabled={streaming}
+            />
+            <button
+              type="button"
+              onClick={send}
+              disabled={!input.trim() || streaming}
+              className={styles.sendBtn}
+            >
+              {streaming ? "..." : "Send"}
+            </button>
+          </div>
+        </>
+      )}
 
       {error && <p className={styles.errorInline}>{error}</p>}
     </main>

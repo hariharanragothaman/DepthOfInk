@@ -294,6 +294,73 @@
   text-align: center;
 }
 
+/* Relationship graph */
+.graphContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  padding: 1rem 0;
+}
+
+.graphSvg {
+  width: 100%;
+  max-width: 600px;
+  height: auto;
+  margin: 0 auto;
+  display: block;
+}
+
+.graphEmpty {
+  text-align: center;
+  color: var(--ink-muted);
+  padding: 2rem;
+  font-style: italic;
+}
+
+.graphLegend {
+  background: var(--ink-surface);
+  border: 1px solid var(--ink-border);
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+}
+
+.graphLegendTitle {
+  font-family: var(--font-serif);
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--ink-text);
+  margin-bottom: 0.5rem;
+}
+
+.graphLegendList {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  font-size: 0.88rem;
+  color: var(--ink-text);
+}
+
+.graphLegendList li {
+  line-height: 1.5;
+}
+
+.graphRelLabel {
+  display: inline-block;
+  margin: 0 0.4rem;
+  padding: 0.1rem 0.45rem;
+  background: rgba(201, 162, 39, 0.1);
+  border-radius: 3px;
+  font-size: 0.78rem;
+  color: var(--ink-accent);
+  font-weight: 500;
+}
+
+.graphRelDesc {
+  color: var(--ink-muted);
+  font-size: 0.82rem;
+}
+
 /* Loading skeletons */
 .skeletonHeader {
   display: flex;

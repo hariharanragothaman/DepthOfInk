@@ -24,6 +24,15 @@ export type GroupChatMessage = ChatMessage & {
   character_name: string;
 };
 
+export type CharacterRelationship = {
+  source_id: string;
+  target_id: string;
+  source_name: string;
+  target_name: string;
+  relationship: string;
+  description: string | null;
+};
+
 export type ConversationHistory = {
   messages: { role: string; content: string }[];
   memory_summary: string;
@@ -183,6 +192,12 @@ export async function getConversationHistory(
 ): Promise<ConversationHistory> {
   const r = await fetch(`${API_BASE}/chat/history/${bookId}/${characterId}`);
   if (!r.ok) throw new Error("Failed to load history");
+  return r.json();
+}
+
+export async function getRelationships(bookId: string): Promise<CharacterRelationship[]> {
+  const r = await fetch(`${API_BASE}/books/${bookId}/relationships`);
+  if (!r.ok) return [];
   return r.json();
 }
 

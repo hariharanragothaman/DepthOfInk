@@ -21,6 +21,15 @@ class CharacterInfo(BaseModel):
     example_quotes: list[str] = Field(default_factory=list)
 
 
+class CharacterRelationship(BaseModel):
+    source_id: str
+    target_id: str
+    source_name: str
+    target_name: str
+    relationship: str
+    description: str | None = None
+
+
 # --- Chat ---
 class ChatMessage(BaseModel):
     role: str  # "user" | "assistant"

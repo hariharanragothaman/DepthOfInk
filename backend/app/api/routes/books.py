@@ -1,15 +1,18 @@
 """Book and PDF upload endpoints."""
+import logging
 from pathlib import Path
 
 from fastapi import APIRouter, File, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 
 from app.config import settings
-from app.models.schemas import BookInfo, CharacterInfo
-from app.services.book_store import save_book
-from app.services.character_service import extract_characters
+from app.models.schemas import BookInfo, CharacterInfo, CharacterRelationship
+from app.services.book_store import save_book, load_relationships, save_relationships
+from app.services.character_service import extract_characters, extract_relationships
 from app.services.pdf_service import chunk_text, detect_chapters, extract_text, generate_book_id
 from app.services.rag_service import create_collection
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/books", tags=["books"])
 
@@ -69,9 +72,7 @@ async def upload_pdf(
         characters = extract_characters(full_text)
     except Exception as e:
         characters = []
-        # Log but don't fail: optional
-        import logging
-        logging.warning("Character extraction failed: %s", e)
+        logger.warning("Character extraction failed: %s", e)
 
     if not characters:
         characters = [
@@ -83,11 +84,28 @@ async def upload_pdf(
             )
         ]
 
+    relationships: list[CharacterRelationship] = []
+    if len(characters) >= 2:
+        try:
+            relationships = extract_relationships(full_text, characters)
+        except Exception as e:
+            logger.warning("Relationship extraction failed: %s", e)
+
     book_title = title or (file.filename or "Untitled").replace(".pdf", "")
-    save_book(book_id, book_title, characters)
+    save_book(book_id, book_title, characters, relationships)
 
     return BookInfo(
         id=book_id,
         title=book_title,
         character_ids=[c.id for c in characters],
     )
+
+
+@router.get("/{book_id}/relationships", response_model=list[CharacterRelationship])
+def get_relationships(book_id: str):
+    """Get character relationship graph for a book."""
+    from app.services.book_store import load_book
+    book = load_book(book_id)
+    if not book:
+        raise HTTPException(status_code=404, detail="Book not found")
+    return load_relationships(book_id)

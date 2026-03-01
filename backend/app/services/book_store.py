@@ -1,11 +1,11 @@
-"""In-memory book metadata store (MVP). Replace with DB in Phase 2."""
+"""In-memory book metadata store (MVP). Replace with DB later."""
 from __future__ import annotations
 
 import json
 from pathlib import Path
 
 from app.config import settings
-from app.models.schemas import BookInfo, CharacterInfo
+from app.models.schemas import BookInfo, CharacterInfo, CharacterRelationship
 
 
 def _meta_path(book_id: str) -> Path:
@@ -13,13 +13,19 @@ def _meta_path(book_id: str) -> Path:
     return settings.data_dir / "books" / f"{book_id}.json"
 
 
-def save_book(book_id: str, title: str, characters: list[CharacterInfo]) -> None:
+def save_book(
+    book_id: str,
+    title: str,
+    characters: list[CharacterInfo],
+    relationships: list[CharacterRelationship] | None = None,
+) -> None:
     path = _meta_path(book_id)
     path.parent.mkdir(parents=True, exist_ok=True)
     data = {
         "id": book_id,
         "title": title,
         "characters": [c.model_dump() for c in characters],
+        "relationships": [r.model_dump() for r in (relationships or [])],
     }
     path.write_text(json.dumps(data, indent=2), encoding="utf-8")
 
@@ -49,6 +55,24 @@ def load_book_with_characters(book_id: str) -> tuple[BookInfo | None, list[Chara
         character_ids=[c.id for c in chars],
     )
     return info, chars
+
+
+def load_relationships(book_id: str) -> list[CharacterRelationship]:
+    path = _meta_path(book_id)
+    if not path.exists():
+        return []
+    data = json.loads(path.read_text(encoding="utf-8"))
+    return [CharacterRelationship(**r) for r in data.get("relationships", [])]
+
+
+def save_relationships(book_id: str, relationships: list[CharacterRelationship]) -> None:
+    """Update just the relationships in an existing book record."""
+    path = _meta_path(book_id)
+    if not path.exists():
+        return
+    data = json.loads(path.read_text(encoding="utf-8"))
+    data["relationships"] = [r.model_dump() for r in relationships]
+    path.write_text(json.dumps(data, indent=2), encoding="utf-8")
 
 
 def list_books() -> list[BookInfo]:
