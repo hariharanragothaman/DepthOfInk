@@ -57,6 +57,10 @@ class Settings(BaseSettings):
     # Chat input limits
     max_message_length: int = 5000
 
+    # Logging: "json" for production structured logs, "text" for dev
+    log_format: str = "text"
+    log_level: str = "INFO"
+
     # Rate limiting (set RATE_LIMIT_ENABLED=false to disable in dev)
     rate_limit_enabled: bool = True
     rate_limit_default: str = "60/minute"
