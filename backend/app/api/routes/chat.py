@@ -1,14 +1,20 @@
 """Chat endpoints with streaming, citations, group chat, and memory."""
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 import json
 
+from app.config import settings
 from app.models.schemas import ChatMessage, ChatRequest, GroupChatRequest
 from app.services.book_store import get_character
 from app.services.chat_service import chat_stream
 from app.services import conversation_store
 
 router = APIRouter(prefix="/chat", tags=["chat"])
+
+
+def _get_limiter():
+    from app.rate_limit import limiter
+    return limiter
 
 
 def _stream_chat(book_id: str, character_id: str, message: str, history: list[dict]):
@@ -31,7 +37,8 @@ def _stream_chat(book_id: str, character_id: str, message: str, history: list[di
 
 
 @router.post("/stream")
-def chat_stream_endpoint(req: ChatRequest):
+@_get_limiter().limit(settings.rate_limit_chat)
+def chat_stream_endpoint(request: Request, req: ChatRequest):
     """Stream assistant reply as newline-delimited JSON."""
     character = get_character(req.book_id, req.character_id)
     if not character:
@@ -48,7 +55,8 @@ def chat_stream_endpoint(req: ChatRequest):
 
 
 @router.post("/message")
-def chat_message(req: ChatRequest):
+@_get_limiter().limit(settings.rate_limit_chat)
+def chat_message(request: Request, req: ChatRequest):
     """Non-streaming single message."""
     from app.services.chat_service import chat
     character = get_character(req.book_id, req.character_id)
@@ -62,7 +70,8 @@ def chat_message(req: ChatRequest):
 # --- Conversation History / Memory ---
 
 @router.get("/history/{book_id}/{character_id}")
-def get_chat_history(book_id: str, character_id: str):
+@_get_limiter().limit(settings.rate_limit_default)
+def get_chat_history(request: Request, book_id: str, character_id: str):
     """Load past conversation messages."""
     messages = conversation_store.load_messages(book_id, character_id)
     summary = conversation_store.get_memory_summary(book_id, character_id)
@@ -70,7 +79,8 @@ def get_chat_history(book_id: str, character_id: str):
 
 
 @router.delete("/history/{book_id}/{character_id}")
-def clear_chat_history(book_id: str, character_id: str):
+@_get_limiter().limit(settings.rate_limit_default)
+def clear_chat_history(request: Request, book_id: str, character_id: str):
     """Clear conversation memory for a character."""
     conversation_store.clear_conversation(book_id, character_id)
     return {"status": "cleared"}
@@ -88,7 +98,8 @@ def _stream_group_chat(book_id: str, character_ids: list[str], message: str, his
 
 
 @router.post("/group/stream")
-def group_chat_stream_endpoint(req: GroupChatRequest):
+@_get_limiter().limit(settings.rate_limit_chat)
+def group_chat_stream_endpoint(request: Request, req: GroupChatRequest):
     """Stream group chat replies as NDJSON."""
     if not req.character_ids:
         raise HTTPException(status_code=400, detail="At least one character required")
@@ -104,7 +115,8 @@ def group_chat_stream_endpoint(req: GroupChatRequest):
 
 
 @router.post("/group/message")
-def group_chat_message(req: GroupChatRequest):
+@_get_limiter().limit(settings.rate_limit_chat)
+def group_chat_message(request: Request, req: GroupChatRequest):
     """Non-streaming group chat."""
     from app.services.group_chat_service import group_chat
     if not req.character_ids:

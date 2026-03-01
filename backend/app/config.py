@@ -48,6 +48,12 @@ class Settings(BaseSettings):
     max_characters: int = 20
     chars_per_sample: int = 12000
 
+    # Rate limiting (set RATE_LIMIT_ENABLED=false to disable in dev)
+    rate_limit_enabled: bool = True
+    rate_limit_default: str = "60/minute"
+    rate_limit_upload: str = "5/hour"
+    rate_limit_chat: str = "30/minute"
+
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
         self.data_dir = self.data_dir.resolve()

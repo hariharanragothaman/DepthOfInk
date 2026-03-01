@@ -3,7 +3,7 @@ import logging
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from fastapi import APIRouter, BackgroundTasks, File, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, File, HTTPException, Request, UploadFile
 
 from app.config import settings
 from app.models.schemas import BookInfo, CharacterInfo, CharacterRelationship
@@ -20,15 +20,21 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/books", tags=["books"])
 
+def _get_limiter():
+    from app.rate_limit import limiter
+    return limiter
+
 
 @router.get("", response_model=list[BookInfo])
-def list_books():
+@_get_limiter().limit(settings.rate_limit_default)
+def list_books(request: Request):
     from app.services.book_store import list_books as _list
     return _list()
 
 
 @router.get("/{book_id}", response_model=BookInfo)
-def get_book(book_id: str):
+@_get_limiter().limit(settings.rate_limit_default)
+def get_book(request: Request, book_id: str):
     from app.services.book_store import load_book
     book = load_book(book_id)
     if not book:
@@ -95,7 +101,9 @@ def _process_book(book_id: str, full_text: str, pages: list[tuple[int, int]], ch
 
 
 @router.post("/upload", response_model=BookInfo)
+@_get_limiter().limit(settings.rate_limit_upload)
 async def upload_pdf(
+    request: Request,
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     title: str | None = None,
@@ -137,7 +145,8 @@ async def upload_pdf(
 
 
 @router.get("/{book_id}/relationships", response_model=list[CharacterRelationship])
-def get_relationships(book_id: str):
+@_get_limiter().limit(settings.rate_limit_default)
+def get_relationships(request: Request, book_id: str):
     """Get character relationship graph for a book."""
     from app.services.book_store import load_book
     book = load_book(book_id)
