@@ -35,6 +35,17 @@ class TestBuildSystemPrompt:
         prompt = build_system_prompt(char, "")
         assert "Relevant passages" not in prompt
 
+    def test_with_memory_summary(self):
+        char = CharacterInfo(id="c1", name="Alice")
+        prompt = build_system_prompt(char, "", memory_summary="User likes cats.")
+        assert "User likes cats." in prompt
+        assert "remember" in prompt.lower()
+
+    def test_no_memory_omits_block(self):
+        char = CharacterInfo(id="c1", name="Alice")
+        prompt = build_system_prompt(char, "")
+        assert "remember" not in prompt.lower()
+
 
 class TestFormatContext:
     def test_single(self):
@@ -53,3 +64,12 @@ class TestFormatContext:
 
     def test_empty(self):
         assert format_context([]) == ""
+
+    def test_with_chapter(self):
+        ctx = format_context([{"text": "Hello", "page": 3, "chapter": 2}])
+        assert "Chapter 2" in ctx
+        assert "[Page 3" in ctx
+
+    def test_without_chapter(self):
+        ctx = format_context([{"text": "Hello", "page": 3}])
+        assert "Chapter" not in ctx

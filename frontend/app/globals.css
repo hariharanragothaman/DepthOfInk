@@ -9,6 +9,13 @@
   --ink-citation: #4a7c59;
   --font-serif: "Cormorant Garamond", "Georgia", serif;
   --font-sans: "DM Sans", "Segoe UI", sans-serif;
+
+  --ink-char-1: #c9a227;
+  --ink-char-2: #4a7c59;
+  --ink-char-3: #7c5a9e;
+  --ink-char-4: #c75c5c;
+  --ink-char-5: #5a8fc7;
+  --ink-char-6: #c77c5a;
 }
 
 * {
@@ -52,7 +59,6 @@ input, textarea {
   font-size: 1rem;
 }
 
-/* Scrollbar */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
@@ -66,4 +72,13 @@ input, textarea {
 }
 ::-webkit-scrollbar-thumb:hover {
   background: var(--ink-muted);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

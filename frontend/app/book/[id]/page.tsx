@@ -7,13 +7,21 @@ import {
   getBook,
   listCharacters,
   streamChat,
+  streamGroupChat,
+  getConversationHistory,
+  clearConversationHistory,
   type BookInfo,
   type CharacterInfo,
   type ChatMessage,
 } from "@/lib/api";
+import ChatBubble from "./components/ChatBubble";
+import CharacterTabs from "./components/CharacterTabs";
 import styles from "./page.module.css";
 
-type Citation = { text: string; page: number; score?: number };
+type DisplayMessage = ChatMessage & {
+  character_id?: string;
+  character_name?: string;
+};
 
 export default function BookPage() {
   const params = useParams();
@@ -21,25 +29,37 @@ export default function BookPage() {
   const [book, setBook] = useState<BookInfo | null>(null);
   const [characters, setCharacters] = useState<CharacterInfo[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [messages, setMessages] = useState<DisplayMessage[]>([]);
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [loadingBook, setLoadingBook] = useState(true);
+  const [groupMode, setGroupMode] = useState(false);
+  const [hasMemory, setHasMemory] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     if (!bookId) return;
-    getBook(bookId)
-      .then(setBook)
-      .catch(() => setError("Book not found"));
-    listCharacters(bookId)
-      .then((list) => {
-        setCharacters(list);
-        if (list.length && !selectedId) setSelectedId(list[0].id);
+    setLoadingBook(true);
+    Promise.all([getBook(bookId), listCharacters(bookId)])
+      .then(([b, chars]) => {
+        setBook(b);
+        setCharacters(chars);
+        if (chars.length && !selectedId) setSelectedId(chars[0].id);
       })
-      .catch(() => setError("Failed to load characters"));
-  }, [bookId]);
+      .catch(() => setError("Book not found"))
+      .finally(() => setLoadingBook(false));
+  }, [bookId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!bookId || !selectedId || groupMode) return;
+    getConversationHistory(bookId, selectedId)
+      .then((h) => {
+        setHasMemory(!!h.memory_summary);
+      })
+      .catch(() => {});
+  }, [bookId, selectedId, groupMode]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -47,17 +67,37 @@ export default function BookPage() {
 
   const selected = characters.find((c) => c.id === selectedId);
 
-  const send = useCallback(async () => {
+  const charIndexMap = useCallback(
+    () => {
+      const map: Record<string, number> = {};
+      characters.forEach((c, i) => { map[c.id] = i; });
+      return map;
+    },
+    [characters]
+  );
+
+  const handleClearMemory = useCallback(async () => {
+    if (!bookId || !selectedId) return;
+    try {
+      await clearConversationHistory(bookId, selectedId);
+      setHasMemory(false);
+      setMessages([]);
+    } catch {
+      setError("Failed to clear memory");
+    }
+  }, [bookId, selectedId]);
+
+  const sendSingle = useCallback(async () => {
     const text = input.trim();
     if (!text || !bookId || !selectedId || streaming) return;
     setInput("");
-    const userMsg: ChatMessage = { role: "user", content: text };
+    const userMsg: DisplayMessage = { role: "user", content: text };
     setMessages((prev) => [...prev, userMsg]);
     setStreaming(true);
     setError(null);
 
     let fullContent = "";
-    let citations: Citation[] = [];
+    let citations: DisplayMessage["citations"] = [];
     setMessages((prev) => [...prev, { role: "assistant", content: "" }]);
 
     try {
@@ -83,19 +123,91 @@ export default function BookPage() {
           next[next.length - 1] = {
             ...last,
             content: fullContent,
-            citations: citations.length ? citations : undefined,
+            citations: citations?.length ? citations : undefined,
           };
         }
         return next;
       });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Chat failed");
-      setMessages((prev) => (prev[prev.length - 1]?.role === "assistant" && !prev[prev.length - 1]?.content ? prev.slice(0, -1) : prev));
+      setMessages((prev) =>
+        prev[prev.length - 1]?.role === "assistant" && !prev[prev.length - 1]?.content
+          ? prev.slice(0, -1)
+          : prev
+      );
     } finally {
       setStreaming(false);
       inputRef.current?.focus();
     }
   }, [bookId, selectedId, input, messages, streaming]);
+
+  const sendGroup = useCallback(async () => {
+    const text = input.trim();
+    if (!text || !bookId || !characters.length || streaming) return;
+    setInput("");
+    const userMsg: DisplayMessage = { role: "user", content: text };
+    setMessages((prev) => [...prev, userMsg]);
+    setStreaming(true);
+    setError(null);
+
+    const charIds = characters.map((c) => c.id);
+    let currentCharId = "";
+    let currentCharName = "";
+    let currentContent = "";
+    let citations: DisplayMessage["citations"] = [];
+
+    try {
+      for await (const event of streamGroupChat(bookId, charIds, text, messages)) {
+        if (event.type === "character_start") {
+          currentCharId = event.character_id ?? "";
+          currentCharName = event.character_name ?? "";
+          currentContent = "";
+          setMessages((prev) => [
+            ...prev,
+            {
+              role: "assistant",
+              content: "",
+              character_id: currentCharId,
+              character_name: currentCharName,
+            },
+          ]);
+        }
+        if (event.type === "content" && event.content) {
+          currentContent += event.content;
+          const cc = currentContent;
+          setMessages((prev) => {
+            const next = [...prev];
+            const last = next[next.length - 1];
+            if (last?.role === "assistant") {
+              next[next.length - 1] = { ...last, content: cc };
+            }
+            return next;
+          });
+        }
+        if (event.type === "citations" && event.citations) {
+          citations = event.citations;
+        }
+        if (event.type === "error") setError(event.content ?? "Stream error");
+      }
+      if (citations?.length) {
+        setMessages((prev) => {
+          const next = [...prev];
+          const lastAssistantIdx = next.findLastIndex((m) => m.role === "assistant");
+          if (lastAssistantIdx >= 0) {
+            next[lastAssistantIdx] = { ...next[lastAssistantIdx], citations };
+          }
+          return next;
+        });
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Group chat failed");
+    } finally {
+      setStreaming(false);
+      inputRef.current?.focus();
+    }
+  }, [bookId, characters, input, messages, streaming]);
+
+  const send = groupMode ? sendGroup : sendSingle;
 
   const onKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -107,11 +219,31 @@ export default function BookPage() {
     [send]
   );
 
+  const idxMap = charIndexMap();
+
+  if (loadingBook) {
+    return (
+      <main className={styles.main}>
+        <div className={styles.skeletonHeader}>
+          <div className={styles.skeletonLine} style={{ width: "60%" }} />
+          <div className={styles.skeletonLine} style={{ width: "40%" }} />
+          <div className={styles.skeletonTabs}>
+            {[1, 2, 3].map((i) => (
+              <div key={i} className={styles.skeletonTab} />
+            ))}
+          </div>
+        </div>
+      </main>
+    );
+  }
+
   if (error && !book) {
     return (
       <main className={styles.main}>
         <p className={styles.error}>{error}</p>
-        <Link href="/" className={styles.back}>← Back</Link>
+        <Link href="/" className={styles.back}>
+          &larr; Back
+        </Link>
       </main>
     );
   }
@@ -119,58 +251,82 @@ export default function BookPage() {
   return (
     <main className={styles.main}>
       <header className={styles.header}>
-        <Link href="/" className={styles.back}>← Books</Link>
-        <h1 className={styles.title}>{book?.title ?? "…"}</h1>
-        <div className={styles.characterTabs}>
-          {characters.map((c) => (
-            <button
-              key={c.id}
-              type="button"
-              className={`${styles.tab} ${selectedId === c.id ? styles.tabActive : ""}`}
-              onClick={() => setSelectedId(c.id)}
-            >
-              {c.name}
-            </button>
-          ))}
+        <Link href="/" className={styles.back}>
+          &larr; Books
+        </Link>
+        <h1 className={styles.title}>{book?.title ?? "\u2026"}</h1>
+
+        <div className={styles.modeToggle}>
+          <button
+            type="button"
+            className={`${styles.modeBtn} ${!groupMode ? styles.modeBtnActive : ""}`}
+            onClick={() => { setGroupMode(false); setMessages([]); }}
+          >
+            Single Character
+          </button>
+          <button
+            type="button"
+            className={`${styles.modeBtn} ${groupMode ? styles.modeBtnActive : ""}`}
+            onClick={() => { setGroupMode(true); setMessages([]); }}
+          >
+            Group Chat
+          </button>
         </div>
+
+        {!groupMode && (
+          <CharacterTabs
+            characters={characters}
+            selectedId={selectedId}
+            onSelect={(id) => { setSelectedId(id); setMessages([]); }}
+            groupMode={groupMode}
+          />
+        )}
       </header>
 
-      {selected && (
+      {!groupMode && selected && (
+        <div className={styles.charMeta}>
+          <p className={styles.characterDesc}>
+            {selected.description || `Chat as ${selected.name}.`}
+          </p>
+          <div className={styles.memoryRow}>
+            {hasMemory && (
+              <span className={styles.memoryBadge}>Remembers past chats</span>
+            )}
+            <button
+              type="button"
+              className={styles.clearBtn}
+              onClick={handleClearMemory}
+            >
+              Clear memory
+            </button>
+          </div>
+        </div>
+      )}
+
+      {groupMode && (
         <p className={styles.characterDesc}>
-          {selected.description || `Chat as ${selected.name}.`}
+          All {characters.length} characters will respond to your messages in turn.
         </p>
       )}
 
       <div className={styles.chat}>
         {messages.length === 0 && (
-          <p className={styles.hint}>Say something to {selected?.name ?? "the character"}…</p>
+          <p className={styles.hint}>
+            {groupMode
+              ? "Say something to all characters\u2026"
+              : `Say something to ${selected?.name ?? "the character"}\u2026`}
+          </p>
         )}
         {messages.map((m, i) => (
-          <div
+          <ChatBubble
             key={i}
-            className={m.role === "user" ? styles.msgUser : styles.msgAssistant}
-          >
-            <div className={styles.msgContent}>{m.content}</div>
-            {m.citations && m.citations.length > 0 && (
-              <details className={styles.citations}>
-                <summary>Cited from the book ({m.citations.length})</summary>
-                <ul>
-                  {m.citations.map((c, j) => (
-                    <li key={j}>
-                      <span className={styles.citePage}>Page {c.page}</span>
-                      <span className={styles.citeText}>{c.text.slice(0, 200)}{c.text.length > 200 ? "…" : ""}</span>
-                    </li>
-                  ))}
-                </ul>
-              </details>
-            )}
-          </div>
+            role={m.role}
+            content={m.content}
+            citations={m.citations}
+            characterName={m.character_name}
+            characterColorIdx={m.character_id ? idxMap[m.character_id] : undefined}
+          />
         ))}
-        {streaming && (
-          <div className={styles.msgAssistant}>
-            <div className={styles.msgContent}>…</div>
-          </div>
-        )}
         <div ref={messagesEndRef} />
       </div>
 
@@ -180,7 +336,11 @@ export default function BookPage() {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={onKeyDown}
-          placeholder={`Message ${selected?.name ?? "character"}…`}
+          placeholder={
+            groupMode
+              ? "Message all characters\u2026"
+              : `Message ${selected?.name ?? "character"}\u2026`
+          }
           className={styles.input}
           rows={2}
           disabled={streaming}
@@ -191,7 +351,7 @@ export default function BookPage() {
           disabled={!input.trim() || streaming}
           className={styles.sendBtn}
         >
-          Send
+          {streaming ? "..." : "Send"}
         </button>
       </div>
 

@@ -8,7 +8,7 @@ from app.config import settings
 from app.models.schemas import BookInfo, CharacterInfo
 from app.services.book_store import save_book
 from app.services.character_service import extract_characters
-from app.services.pdf_service import chunk_text, extract_text, generate_book_id
+from app.services.pdf_service import chunk_text, detect_chapters, extract_text, generate_book_id
 from app.services.rag_service import create_collection
 
 router = APIRouter(prefix="/books", tags=["books"])
@@ -55,11 +55,13 @@ async def upload_pdf(
         path.unlink(missing_ok=True)
         raise HTTPException(status_code=422, detail="No text could be extracted from the PDF")
 
+    chapters = detect_chapters(full_text)
     chunks = chunk_text(
         full_text,
         pages,
         chunk_size=settings.chunk_size,
         chunk_overlap=settings.chunk_overlap,
+        chapters=chapters if chapters else None,
     )
     create_collection(book_id, chunks)
 

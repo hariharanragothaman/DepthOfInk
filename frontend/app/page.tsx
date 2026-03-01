@@ -2,13 +2,16 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { listBooks, uploadPdf, type BookInfo } from "@/lib/api";
 import styles from "./page.module.css";
 
 export default function HomePage() {
+  const router = useRouter();
   const [books, setBooks] = useState<BookInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
+  const [uploadStage, setUploadStage] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [drag, setDrag] = useState(false);
 
@@ -36,18 +39,22 @@ export default function HomePage() {
         return;
       }
       setUploading(true);
+      setUploadStage("Uploading PDF...");
       setError(null);
       try {
+        setUploadStage("Extracting text and characters...");
         const book = await uploadPdf(file, undefined);
         setBooks((prev) => [book, ...prev]);
-        window.location.href = `/book/${book.id}`;
+        setUploadStage("Done! Redirecting...");
+        router.push(`/book/${book.id}`);
       } catch (e) {
         setError(e instanceof Error ? e.message : "Upload failed");
       } finally {
         setUploading(false);
+        setUploadStage("");
       }
     },
-    []
+    [router]
   );
 
   const onDrop = useCallback(
@@ -94,7 +101,10 @@ export default function HomePage() {
           aria-label="Upload PDF"
         />
         {uploading ? (
-          <p className={styles.uploadText}>Processing PDF and extracting characters…</p>
+          <>
+            <div className={styles.spinner} />
+            <p className={styles.uploadText}>{uploadStage}</p>
+          </>
         ) : (
           <>
             <p className={styles.uploadText}>Drop a PDF here or click to choose</p>
@@ -108,7 +118,11 @@ export default function HomePage() {
       <section className={styles.books}>
         <h2 className={styles.booksTitle}>Your books</h2>
         {loading ? (
-          <p className={styles.muted}>Loading…</p>
+          <div className={styles.skeletonList}>
+            {[1, 2, 3].map((i) => (
+              <div key={i} className={styles.skeletonCard} />
+            ))}
+          </div>
         ) : books.length === 0 ? (
           <p className={styles.muted}>No books yet. Upload a PDF to get started.</p>
         ) : (
@@ -126,7 +140,7 @@ export default function HomePage() {
       </section>
 
       <footer className={styles.footer}>
-        <p>MVP — Phase 2: memory, better retrieval, scene mode.</p>
+        <p>Phase 2 — memory, reranking, group chat, chapter-aware retrieval.</p>
       </footer>
     </main>
   );

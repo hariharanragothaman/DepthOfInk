@@ -68,6 +68,20 @@
   color: var(--ink-muted);
 }
 
+.spinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid var(--ink-border);
+  border-top-color: var(--ink-accent);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  margin: 0 auto 0.75rem;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
 .error {
   color: #c75c5c;
   font-size: 0.95rem;
@@ -125,10 +139,44 @@
   color: var(--ink-muted);
 }
 
+.skeletonList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.skeletonCard {
+  height: 64px;
+  background: var(--ink-surface);
+  border: 1px solid var(--ink-border);
+  border-radius: 8px;
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+
 .footer {
   padding-top: 2rem;
   border-top: 1px solid var(--ink-border);
   text-align: center;
   font-size: 0.85rem;
   color: var(--ink-muted);
+}
+
+@media (max-width: 480px) {
+  .main {
+    padding: 1.25rem 1rem;
+    gap: 1.5rem;
+  }
+
+  .title {
+    font-size: 1.75rem;
+  }
+
+  .upload {
+    padding: 2rem 1rem;
+  }
 }

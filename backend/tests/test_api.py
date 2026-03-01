@@ -102,3 +102,41 @@ class TestChatEndpoints:
             },
         )
         assert r.status_code == 404
+
+
+class TestConversationHistoryEndpoints:
+    def test_get_history_empty(self, client, tmp_data_dir):
+        r = client.get("/chat/history/book1/char1")
+        assert r.status_code == 200
+        data = r.json()
+        assert data["messages"] == []
+        assert data["memory_summary"] == ""
+
+    def test_clear_history(self, client, tmp_data_dir):
+        r = client.delete("/chat/history/book1/char1")
+        assert r.status_code == 200
+        assert r.json()["status"] == "cleared"
+
+
+class TestGroupChatEndpoints:
+    def test_group_stream_no_characters(self, client, tmp_data_dir):
+        r = client.post(
+            "/chat/group/stream",
+            json={
+                "book_id": "b1",
+                "character_ids": [],
+                "message": "Hello",
+            },
+        )
+        assert r.status_code == 400
+
+    def test_group_message_no_characters(self, client, tmp_data_dir):
+        r = client.post(
+            "/chat/group/message",
+            json={
+                "book_id": "b1",
+                "character_ids": [],
+                "message": "Hello",
+            },
+        )
+        assert r.status_code == 400

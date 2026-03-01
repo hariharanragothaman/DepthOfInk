@@ -39,6 +39,11 @@ class Settings(BaseSettings):
     top_k_retrieve: int = 5
     min_relevance_score: float = 0.0
 
+    # Reranking
+    rerank_enabled: bool = True
+    rerank_initial_k: int = 15
+    rerank_final_k: int = 5
+
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
         self.data_dir = self.data_dir.resolve()

@@ -25,7 +25,7 @@ class CharacterInfo(BaseModel):
 class ChatMessage(BaseModel):
     role: str  # "user" | "assistant"
     content: str
-    citations: list[dict] = Field(default_factory=list)  # [{ "text", "page", "source" }]
+    citations: list[dict] = Field(default_factory=list)
 
 
 class ChatRequest(BaseModel):
@@ -33,6 +33,7 @@ class ChatRequest(BaseModel):
     character_id: str
     message: str
     history: list[ChatMessage] = Field(default_factory=list, max_length=20)
+    conversation_id: str | None = None
 
 
 class ChatChunk(BaseModel):
@@ -40,3 +41,16 @@ class ChatChunk(BaseModel):
     type: str  # "content" | "citation" | "done"
     content: str = ""
     citation: dict | None = None
+
+
+# --- Group Chat ---
+class GroupChatRequest(BaseModel):
+    book_id: str
+    character_ids: list[str]
+    message: str
+    history: list[ChatMessage] = Field(default_factory=list, max_length=20)
+
+
+class GroupChatMessage(ChatMessage):
+    character_id: str = ""
+    character_name: str = ""

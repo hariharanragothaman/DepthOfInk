@@ -9,6 +9,8 @@ from app.models.schemas import (
     ChatChunk,
     ChatMessage,
     ChatRequest,
+    GroupChatMessage,
+    GroupChatRequest,
 )
 
 
@@ -80,3 +82,54 @@ class TestChatChunk:
     def test_done_chunk(self):
         c = ChatChunk(type="done")
         assert c.content == ""
+
+
+class TestChatRequestConversationId:
+    def test_default_none(self):
+        req = ChatRequest(book_id="b1", character_id="c1", message="Hi")
+        assert req.conversation_id is None
+
+    def test_with_conversation_id(self):
+        req = ChatRequest(
+            book_id="b1", character_id="c1", message="Hi",
+            conversation_id="conv_123"
+        )
+        assert req.conversation_id == "conv_123"
+
+
+class TestGroupChatRequest:
+    def test_valid(self):
+        req = GroupChatRequest(
+            book_id="b1",
+            character_ids=["c1", "c2"],
+            message="Hello all!",
+        )
+        assert len(req.character_ids) == 2
+        assert req.history == []
+
+    def test_with_history(self):
+        req = GroupChatRequest(
+            book_id="b1",
+            character_ids=["c1"],
+            message="Hi",
+            history=[ChatMessage(role="user", content="Hey")],
+        )
+        assert len(req.history) == 1
+
+
+class TestGroupChatMessage:
+    def test_fields(self):
+        msg = GroupChatMessage(
+            role="assistant",
+            content="Hello!",
+            character_id="c1",
+            character_name="Alice",
+        )
+        assert msg.character_id == "c1"
+        assert msg.character_name == "Alice"
+        assert msg.role == "assistant"
+
+    def test_defaults(self):
+        msg = GroupChatMessage(role="assistant", content="Hi")
+        assert msg.character_id == ""
+        assert msg.character_name == ""

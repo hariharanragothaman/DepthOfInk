@@ -16,7 +16,17 @@ export type CharacterInfo = {
 export type ChatMessage = {
   role: string;
   content: string;
-  citations?: { text: string; page: number; score?: number }[];
+  citations?: { text: string; page: number; score?: number; chapter?: number; chapter_title?: string }[];
+};
+
+export type GroupChatMessage = ChatMessage & {
+  character_id: string;
+  character_name: string;
+};
+
+export type ConversationHistory = {
+  messages: { role: string; content: string }[];
+  memory_summary: string;
 };
 
 export async function listBooks(): Promise<BookInfo[]> {
@@ -76,28 +86,10 @@ export async function sendMessage(
   return r.json();
 }
 
-export async function* streamChat(
-  bookId: string,
-  characterId: string,
-  message: string,
-  history: ChatMessage[]
-): AsyncGenerator<{ type: string; content?: string; citations?: { text: string; page: number }[] }> {
-  const r = await fetch(`${API_BASE}/chat/stream`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      book_id: bookId,
-      character_id: characterId,
-      message,
-      history: history.map((m) => ({
-        role: m.role,
-        content: m.content,
-        citations: m.citations ?? [],
-      })),
-    }),
-  });
-  if (!r.ok) throw new Error("Stream failed");
-  const reader = r.body?.getReader();
+async function* _parseNDJSON(
+  response: Response
+): AsyncGenerator<Record<string, unknown>> {
+  const reader = response.body?.getReader();
   if (!reader) throw new Error("No body");
   const dec = new TextDecoder();
   let buf = "";
@@ -123,4 +115,83 @@ export async function* streamChat(
       // skip
     }
   }
+}
+
+export async function* streamChat(
+  bookId: string,
+  characterId: string,
+  message: string,
+  history: ChatMessage[]
+): AsyncGenerator<{ type: string; content?: string; citations?: { text: string; page: number }[] }> {
+  const r = await fetch(`${API_BASE}/chat/stream`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      book_id: bookId,
+      character_id: characterId,
+      message,
+      history: history.map((m) => ({
+        role: m.role,
+        content: m.content,
+        citations: m.citations ?? [],
+      })),
+    }),
+  });
+  if (!r.ok) throw new Error("Stream failed");
+  yield* _parseNDJSON(r) as AsyncGenerator<{ type: string; content?: string; citations?: { text: string; page: number }[] }>;
+}
+
+export async function* streamGroupChat(
+  bookId: string,
+  characterIds: string[],
+  message: string,
+  history: ChatMessage[]
+): AsyncGenerator<{
+  type: string;
+  content?: string;
+  character_id?: string;
+  character_name?: string;
+  citations?: { text: string; page: number }[];
+}> {
+  const r = await fetch(`${API_BASE}/chat/group/stream`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      book_id: bookId,
+      character_ids: characterIds,
+      message,
+      history: history.map((m) => ({
+        role: m.role,
+        content: m.content,
+        citations: m.citations ?? [],
+      })),
+    }),
+  });
+  if (!r.ok) throw new Error("Group chat stream failed");
+  yield* _parseNDJSON(r) as AsyncGenerator<{
+    type: string;
+    content?: string;
+    character_id?: string;
+    character_name?: string;
+    citations?: { text: string; page: number }[];
+  }>;
+}
+
+export async function getConversationHistory(
+  bookId: string,
+  characterId: string
+): Promise<ConversationHistory> {
+  const r = await fetch(`${API_BASE}/chat/history/${bookId}/${characterId}`);
+  if (!r.ok) throw new Error("Failed to load history");
+  return r.json();
+}
+
+export async function clearConversationHistory(
+  bookId: string,
+  characterId: string
+): Promise<void> {
+  const r = await fetch(`${API_BASE}/chat/history/${bookId}/${characterId}`, {
+    method: "DELETE",
+  });
+  if (!r.ok) throw new Error("Failed to clear history");
 }
