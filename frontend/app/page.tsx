@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { listBooks, uploadPdf, type BookInfo } from "@/lib/api";
+import { listBooks, uploadPdf, deleteBook, retryBook, type BookInfo } from "@/lib/api";
 import styles from "./page.module.css";
 
 export default function HomePage() {
@@ -84,6 +84,36 @@ export default function HomePage() {
     [handleFile]
   );
 
+  const handleDelete = useCallback(
+    async (e: React.MouseEvent, bookId: string) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (!confirm("Delete this book and all its data?")) return;
+      try {
+        await deleteBook(bookId);
+        setBooks((prev) => prev.filter((b) => b.id !== bookId));
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Delete failed");
+      }
+    },
+    []
+  );
+
+  const handleRetry = useCallback(
+    async (e: React.MouseEvent, bookId: string) => {
+      e.preventDefault();
+      e.stopPropagation();
+      try {
+        const updated = await retryBook(bookId);
+        setBooks((prev) => prev.map((b) => (b.id === bookId ? updated : b)));
+        router.push(`/book/${bookId}`);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Retry failed");
+      }
+    },
+    [router]
+  );
+
   return (
     <main className={styles.main}>
       <header className={styles.header}>
@@ -133,7 +163,7 @@ export default function HomePage() {
         ) : (
           <ul className={styles.bookList}>
             {books.map((b) => (
-              <li key={b.id}>
+              <li key={b.id} className={styles.bookItem}>
                 <Link href={`/book/${b.id}`} className={styles.bookCard}>
                   <span className={styles.bookTitle}>{b.title}</span>
                   <span className={styles.bookMeta}>
@@ -146,6 +176,24 @@ export default function HomePage() {
                     )}
                   </span>
                 </Link>
+                <div className={styles.bookActions}>
+                  {b.status === "error" && (
+                    <button
+                      className={styles.retryBtn}
+                      onClick={(e) => handleRetry(e, b.id)}
+                      title="Retry processing"
+                    >
+                      ↻
+                    </button>
+                  )}
+                  <button
+                    className={styles.deleteBtn}
+                    onClick={(e) => handleDelete(e, b.id)}
+                    title="Delete book"
+                  >
+                    ✕
+                  </button>
+                </div>
               </li>
             ))}
           </ul>

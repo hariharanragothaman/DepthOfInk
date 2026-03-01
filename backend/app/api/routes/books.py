@@ -8,6 +8,7 @@ from fastapi import APIRouter, BackgroundTasks, File, HTTPException, Request, Up
 from app.config import settings
 from app.models.schemas import BookInfo, CharacterInfo, CharacterRelationship
 from app.services.book_store import (
+    delete_book as _delete_book,
     load_relationships,
     save_book,
     update_book_status,
@@ -159,6 +160,46 @@ async def upload_pdf(
     return BookInfo(
         id=book_id,
         title=book_title,
+        character_ids=[],
+        status="processing",
+    )
+
+
+@router.delete("/{book_id}", status_code=200)
+@_get_limiter().limit(settings.rate_limit_default)
+def delete_book(request: Request, book_id: str):
+    if not _delete_book(book_id):
+        raise HTTPException(status_code=404, detail="Book not found")
+    return {"status": "deleted", "book_id": book_id}
+
+
+@router.post("/{book_id}/retry", response_model=BookInfo)
+@_get_limiter().limit(settings.rate_limit_upload)
+def retry_processing(request: Request, background_tasks: BackgroundTasks, book_id: str):
+    """Re-trigger processing for a book stuck in 'error' state."""
+    from app.services.book_store import load_book
+    book = load_book(book_id)
+    if not book:
+        raise HTTPException(status_code=404, detail="Book not found")
+    if book.status != "error":
+        raise HTTPException(status_code=409, detail="Book is not in error state")
+
+    pdf_path = settings.uploads_dir / f"{book_id}.pdf"
+    if not pdf_path.exists():
+        raise HTTPException(status_code=410, detail="PDF file no longer available")
+
+    try:
+        full_text, pages = extract_text(pdf_path)
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=f"PDF extraction failed: {e}") from e
+
+    chapters = detect_chapters(full_text)
+    update_book_status(book_id, status="processing")
+    background_tasks.add_task(_process_book, book_id, full_text, pages, chapters)
+
+    return BookInfo(
+        id=book.id,
+        title=book.title,
         character_ids=[],
         status="processing",
     )

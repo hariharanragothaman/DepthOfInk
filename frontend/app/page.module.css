@@ -112,12 +112,20 @@
   gap: 0.5rem;
 }
 
+.bookItem {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+}
+
 .bookCard {
   display: block;
+  flex: 1;
   padding: 1rem 1.25rem;
   background: var(--ink-surface);
   border: 1px solid var(--ink-border);
-  border-radius: 8px;
+  border-radius: 8px 0 0 8px;
   color: var(--ink-text);
   transition: border-color 0.2s, background 0.2s;
 }
@@ -126,6 +134,41 @@
   border-color: var(--ink-accent-dim);
   background: rgba(201, 162, 39, 0.04);
   text-decoration: none;
+}
+
+.bookActions {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--ink-border);
+  border-left: none;
+  border-radius: 0 8px 8px 0;
+  overflow: hidden;
+  background: var(--ink-surface);
+}
+
+.deleteBtn,
+.retryBtn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 0.9rem;
+  color: var(--ink-muted);
+  transition: background 0.15s, color 0.15s;
+}
+
+.deleteBtn:hover {
+  background: rgba(199, 92, 92, 0.12);
+  color: #c75c5c;
+}
+
+.retryBtn:hover {
+  background: rgba(201, 162, 39, 0.12);
+  color: var(--ink-accent);
 }
 
 .bookTitle {

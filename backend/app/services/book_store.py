@@ -2,10 +2,14 @@
 from __future__ import annotations
 
 import json
+import logging
+import shutil
 from pathlib import Path
 
 from app.config import settings
 from app.models.schemas import BookInfo, CharacterInfo, CharacterRelationship
+
+logger = logging.getLogger(__name__)
 
 
 def _meta_path(book_id: str) -> Path:
@@ -126,3 +130,30 @@ def get_character(book_id: str, character_id: str) -> CharacterInfo | None:
         if c.id == character_id:
             return c
     return None
+
+
+def delete_book(book_id: str) -> bool:
+    """Delete a book and all associated data (PDF, embeddings, conversations).
+
+    Returns True if the book existed and was deleted, False if not found.
+    """
+    meta = _meta_path(book_id)
+    if not meta.exists():
+        return False
+
+    meta.unlink(missing_ok=True)
+
+    pdf_path = settings.uploads_dir / f"{book_id}.pdf"
+    pdf_path.unlink(missing_ok=True)
+
+    chroma_path = settings.chroma_dir / book_id
+    if chroma_path.exists():
+        shutil.rmtree(chroma_path, ignore_errors=True)
+
+    conv_dir = settings.data_dir / "conversations"
+    if conv_dir.exists():
+        for p in conv_dir.glob(f"{book_id}_*.json"):
+            p.unlink(missing_ok=True)
+
+    logger.info("Deleted book %s and all associated data", book_id)
+    return True

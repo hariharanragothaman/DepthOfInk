@@ -115,6 +115,45 @@ class TestBooksEndpoints:
             assert "too large" in r.json()["detail"]
 
 
+class TestDeleteBookEndpoint:
+    def test_delete_existing(self, client, tmp_data_dir):
+        save_book("book_del", "Deletable", [CharacterInfo(id="c1", name="Hero")])
+        r = client.delete("/books/book_del")
+        assert r.status_code == 200
+        assert r.json()["status"] == "deleted"
+        r2 = client.get("/books/book_del")
+        assert r2.status_code == 404
+
+    def test_delete_not_found(self, client, tmp_data_dir):
+        r = client.delete("/books/nonexist")
+        assert r.status_code == 404
+
+    def test_delete_removes_from_list(self, client, tmp_data_dir):
+        save_book("book_d2", "ToDelete", [])
+        assert len(client.get("/books").json()) == 1
+        client.delete("/books/book_d2")
+        assert len(client.get("/books").json()) == 0
+
+
+class TestRetryEndpoint:
+    def test_retry_error_book_missing_pdf(self, client, tmp_data_dir):
+        save_book("book_err", "Error Book", [], status="error")
+        from app.services.book_store import update_book_status
+        update_book_status("book_err", status="error", error="Something broke")
+        r = client.post("/books/book_err/retry")
+        assert r.status_code == 410
+        assert "no longer available" in r.json()["detail"]
+
+    def test_retry_non_error_book(self, client, tmp_data_dir):
+        save_book("book_ok", "OK Book", [CharacterInfo(id="c1", name="A")])
+        r = client.post("/books/book_ok/retry")
+        assert r.status_code == 409
+
+    def test_retry_not_found(self, client, tmp_data_dir):
+        r = client.post("/books/nonexist/retry")
+        assert r.status_code == 404
+
+
 class TestCharacterEndpoints:
     def test_list_characters(self, client, tmp_data_dir):
         chars = [

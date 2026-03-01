@@ -4,6 +4,7 @@ from pathlib import Path
 
 from app.models.schemas import BookInfo, CharacterInfo
 from app.services.book_store import (
+    delete_book,
     get_character,
     list_books,
     load_book,
@@ -99,3 +100,39 @@ class TestUpdateBookStatus:
         save_book("book_ps", "Test", [], status="processing")
         book = load_book("book_ps")
         assert book.status == "processing"
+
+
+class TestDeleteBook:
+    def test_delete_existing(self, tmp_data_dir):
+        save_book("book_del", "Deletable", [CharacterInfo(id="c1", name="Alice")])
+        assert load_book("book_del") is not None
+        result = delete_book("book_del")
+        assert result is True
+        assert load_book("book_del") is None
+
+    def test_delete_nonexistent(self, tmp_data_dir):
+        result = delete_book("nope")
+        assert result is False
+
+    def test_delete_removes_from_list(self, tmp_data_dir):
+        save_book("book_d1", "A", [])
+        save_book("book_d2", "B", [])
+        assert len(list_books()) == 2
+        delete_book("book_d1")
+        remaining = list_books()
+        assert len(remaining) == 1
+        assert remaining[0].id == "book_d2"
+
+    def test_delete_cleans_conversations(self, tmp_data_dir):
+        from app.config import settings
+        save_book("book_conv", "Conv Test", [CharacterInfo(id="c1", name="A")])
+        conv_dir = settings.data_dir / "conversations"
+        conv_dir.mkdir(parents=True, exist_ok=True)
+        (conv_dir / "book_conv_c1.json").write_text('{"messages":[],"memory_summary":""}')
+        (conv_dir / "book_conv_c2.json").write_text('{"messages":[],"memory_summary":""}')
+        (conv_dir / "other_book_c1.json").write_text('{"messages":[],"memory_summary":""}')
+
+        delete_book("book_conv")
+        assert not (conv_dir / "book_conv_c1.json").exists()
+        assert not (conv_dir / "book_conv_c2.json").exists()
+        assert (conv_dir / "other_book_c1.json").exists()

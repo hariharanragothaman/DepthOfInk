@@ -67,6 +67,23 @@ export async function uploadPdf(file: File, title?: string): Promise<BookInfo> {
   return r.json();
 }
 
+export async function deleteBook(bookId: string): Promise<void> {
+  const r = await fetch(`${API_BASE}/books/${bookId}`, { method: "DELETE" });
+  if (!r.ok) {
+    const err = await r.json().catch(() => ({ detail: r.statusText }));
+    throw new Error(err.detail || "Delete failed");
+  }
+}
+
+export async function retryBook(bookId: string): Promise<BookInfo> {
+  const r = await fetch(`${API_BASE}/books/${bookId}/retry`, { method: "POST" });
+  if (!r.ok) {
+    const err = await r.json().catch(() => ({ detail: r.statusText }));
+    throw new Error(err.detail || "Retry failed");
+  }
+  return r.json();
+}
+
 export async function listCharacters(bookId: string): Promise<CharacterInfo[]> {
   const r = await fetch(`${API_BASE}/books/${bookId}/characters`);
   if (!r.ok) throw new Error("Failed to list characters");

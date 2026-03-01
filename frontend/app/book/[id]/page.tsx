@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import {
   getBook,
   listCharacters,
@@ -11,6 +12,8 @@ import {
   getConversationHistory,
   clearConversationHistory,
   getRelationships,
+  deleteBook,
+  retryBook,
   type BookInfo,
   type CharacterInfo,
   type CharacterRelationship,
@@ -28,6 +31,7 @@ type DisplayMessage = ChatMessage & {
 
 export default function BookPage() {
   const params = useParams();
+  const router = useRouter();
   const bookId = params?.id as string;
   const [book, setBook] = useState<BookInfo | null>(null);
   const [characters, setCharacters] = useState<CharacterInfo[]>([]);
@@ -298,7 +302,40 @@ export default function BookPage() {
           <Link href="/" className={styles.back}>&larr; Books</Link>
           <h1 className={styles.title}>{book.title}</h1>
         </header>
-        <p className={styles.error}>Processing failed: {book.error || "Unknown error"}</p>
+        <div className={styles.errorWrap}>
+          <p className={styles.error}>Processing failed: {book.error || "Unknown error"}</p>
+          <div className={styles.errorActions}>
+            <button
+              className={styles.retryBtnLarge}
+              onClick={async () => {
+                try {
+                  const updated = await retryBook(bookId);
+                  setBook(updated);
+                  setError(null);
+                } catch (e) {
+                  setError(e instanceof Error ? e.message : "Retry failed");
+                }
+              }}
+            >
+              ↻ Retry
+            </button>
+            <button
+              className={styles.deleteBtnLarge}
+              onClick={async () => {
+                if (!confirm("Delete this book and all its data?")) return;
+                try {
+                  await deleteBook(bookId);
+                  router.push("/");
+                } catch (e) {
+                  setError(e instanceof Error ? e.message : "Delete failed");
+                }
+              }}
+            >
+              ✕ Delete
+            </button>
+          </div>
+        </div>
+        {error && <p className={styles.errorInline}>{error}</p>}
       </main>
     );
   }
