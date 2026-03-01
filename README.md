@@ -1,6 +1,8 @@
 <p align="center">
-  <h1 align="center">DepthOfInk</h1>
+  <img alt="DepthOfInk" src="assets/logo.png" width="350px">
 </p>
+
+<h1 align="center">DepthOfInk</h1>
 
 <p align="center">
   <strong>Upload a storybook PDF. Chat with its characters. Every reply grounded in the text.</strong>
