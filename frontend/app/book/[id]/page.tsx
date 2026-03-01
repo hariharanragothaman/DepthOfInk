@@ -163,7 +163,7 @@ export default function BookPage() {
     let citations: DisplayMessage["citations"] = [];
 
     try {
-      for await (const event of streamGroupChat(bookId, charIds, text, messages)) {
+      for await (const event of streamGroupChat(bookId, charIds, text, messages.slice(-60))) {
         if (event.type === "character_start") {
           currentCharId = event.character_id ?? "";
           currentCharName = event.character_name ?? "";

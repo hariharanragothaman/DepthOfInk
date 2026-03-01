@@ -57,7 +57,7 @@ class GroupChatRequest(BaseModel):
     book_id: str
     character_ids: list[str]
     message: str
-    history: list[ChatMessage] = Field(default_factory=list, max_length=20)
+    history: list[ChatMessage] = Field(default_factory=list, max_length=100)
 
 
 class GroupChatMessage(ChatMessage):
