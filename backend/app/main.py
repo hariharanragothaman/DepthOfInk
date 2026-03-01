@@ -71,4 +71,39 @@ app.include_router(chat.router)
 
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+    checks: dict[str, str] = {}
+
+    for label, path in [
+        ("data_dir", settings.data_dir),
+        ("uploads_dir", settings.uploads_dir),
+        ("chroma_dir", settings.chroma_dir),
+    ]:
+        try:
+            path.mkdir(parents=True, exist_ok=True)
+            probe = path / ".health_probe"
+            probe.write_text("ok")
+            probe.unlink()
+            checks[label] = "ok"
+        except Exception as e:
+            checks[label] = f"error: {e}"
+
+    try:
+        import chromadb
+        from chromadb.config import Settings as ChromaSettings
+        client = chromadb.PersistentClient(
+            path=str(settings.chroma_dir / "_health"),
+            settings=ChromaSettings(anonymized_telemetry=False),
+        )
+        client.heartbeat()
+        checks["chromadb"] = "ok"
+    except Exception as e:
+        checks["chromadb"] = f"error: {e}"
+
+    overall = "ok" if all(v == "ok" for v in checks.values()) else "degraded"
+    status_code = 200 if overall == "ok" else 503
+
+    from fastapi.responses import JSONResponse
+    return JSONResponse(
+        content={"status": overall, "checks": checks},
+        status_code=status_code,
+    )

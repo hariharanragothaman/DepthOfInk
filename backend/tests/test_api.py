@@ -10,7 +10,13 @@ class TestHealth:
     def test_health_ok(self, client):
         r = client.get("/health")
         assert r.status_code == 200
-        assert r.json() == {"status": "ok"}
+        body = r.json()
+        assert body["status"] == "ok"
+        assert "checks" in body
+        assert body["checks"]["data_dir"] == "ok"
+        assert body["checks"]["uploads_dir"] == "ok"
+        assert body["checks"]["chroma_dir"] == "ok"
+        assert body["checks"]["chromadb"] == "ok"
 
 
 class TestCORS:
