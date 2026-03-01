@@ -32,10 +32,16 @@ export default function HomePage() {
     load();
   }, [load]);
 
+  const MAX_FILE_SIZE_MB = 50;
+
   const handleFile = useCallback(
     async (file: File) => {
       if (!file.name.toLowerCase().endsWith(".pdf")) {
         setError("Please choose a PDF file.");
+        return;
+      }
+      if (file.size > MAX_FILE_SIZE_MB * 1024 * 1024) {
+        setError(`File too large. Maximum size is ${MAX_FILE_SIZE_MB} MB.`);
         return;
       }
       setUploading(true);

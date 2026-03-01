@@ -56,6 +56,24 @@ class TestBooksEndpoints:
         assert r.status_code == 400
         assert "PDF" in r.json()["detail"]
 
+    def test_upload_invalid_pdf_magic_bytes(self, client, tmp_data_dir):
+        r = client.post(
+            "/books/upload",
+            files={"file": ("fake.pdf", b"this is not a real PDF file", "application/pdf")},
+        )
+        assert r.status_code == 400
+        assert "valid PDF" in r.json()["detail"]
+
+    def test_upload_file_too_large(self, client, tmp_data_dir):
+        from unittest.mock import patch
+        with patch("app.config.settings.max_upload_size_mb", 0):
+            r = client.post(
+                "/books/upload",
+                files={"file": ("big.pdf", b"%PDF-1.4 some content", "application/pdf")},
+            )
+            assert r.status_code == 413
+            assert "too large" in r.json()["detail"]
+
 
 class TestCharacterEndpoints:
     def test_list_characters(self, client, tmp_data_dir):

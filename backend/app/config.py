@@ -48,6 +48,9 @@ class Settings(BaseSettings):
     max_characters: int = 20
     chars_per_sample: int = 12000
 
+    # Upload limits
+    max_upload_size_mb: int = 50
+
     # Rate limiting (set RATE_LIMIT_ENABLED=false to disable in dev)
     rate_limit_enabled: bool = True
     rate_limit_default: str = "60/minute"

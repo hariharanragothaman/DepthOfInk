@@ -110,12 +110,32 @@ async def upload_pdf(
 ):
     if not file.filename or not file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Please upload a PDF file")
+
+    max_bytes = settings.max_upload_size_mb * 1024 * 1024
+    if file.size is not None and file.size > max_bytes:
+        raise HTTPException(
+            status_code=413,
+            detail=f"File too large. Maximum size is {settings.max_upload_size_mb} MB.",
+        )
+
     settings.uploads_dir.mkdir(parents=True, exist_ok=True)
     book_id = generate_book_id()
     path = settings.uploads_dir / f"{book_id}.pdf"
     try:
         content = await file.read()
+        if len(content) > max_bytes:
+            raise HTTPException(
+                status_code=413,
+                detail=f"File too large. Maximum size is {settings.max_upload_size_mb} MB.",
+            )
+        if not content[:5].startswith(b"%PDF-"):
+            raise HTTPException(
+                status_code=400,
+                detail="File does not appear to be a valid PDF.",
+            )
         path.write_bytes(content)
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to save file: {e}") from e
 
