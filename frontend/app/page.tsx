@@ -142,8 +142,15 @@ export default function HomePage() {
           </>
         ) : (
           <>
-            <p className={styles.uploadText}>Drop a PDF here or click to choose</p>
-            <p className={styles.uploadHint}>Storybooks and narrative PDFs work best.</p>
+            <p className={styles.uploadText}>
+              <span className={styles.desktopOnly}>Drop a PDF here or click to choose</span>
+              <span className={styles.mobileOnly}>Tap to choose a PDF</span>
+            </p>
+            <p className={styles.uploadHint}>
+              Storybooks and narrative PDFs work best.
+              <br />
+              <span className={styles.sizeHint}>Max {MAX_FILE_SIZE_MB} MB</span>
+            </p>
           </>
         )}
       </section>

@@ -34,6 +34,12 @@
   background: var(--ink-surface);
   transition: border-color 0.2s, background 0.2s;
   position: relative;
+  /* Ensure minimum touch target on mobile */
+  min-height: 120px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
 }
 
 .upload:hover {
@@ -66,6 +72,19 @@
 .uploadHint {
   font-size: 0.9rem;
   color: var(--ink-muted);
+}
+
+.sizeHint {
+  font-size: 0.8rem;
+  opacity: 0.7;
+}
+
+.desktopOnly {
+  display: inline;
+}
+
+.mobileOnly {
+  display: none;
 }
 
 .spinner {
@@ -236,17 +255,100 @@
   color: var(--ink-muted);
 }
 
+/* Tablet */
+@media (max-width: 768px) {
+  .main {
+    padding: 1.5rem 1.25rem;
+    gap: 1.75rem;
+  }
+
+  .bookActions {
+    flex-direction: row;
+  }
+
+  .deleteBtn,
+  .retryBtn {
+    width: 44px;
+    min-height: 44px;
+    font-size: 1rem;
+  }
+}
+
+/* Mobile */
 @media (max-width: 480px) {
   .main {
-    padding: 1.25rem 1rem;
-    gap: 1.5rem;
+    padding: 1.25rem 0.75rem;
+    gap: 1.25rem;
   }
 
   .title {
     font-size: 1.75rem;
   }
 
+  .subtitle {
+    font-size: 0.9rem;
+  }
+
   .upload {
-    padding: 2rem 1rem;
+    padding: 2.5rem 1rem;
+    min-height: 140px;
+    border-radius: 10px;
+  }
+
+  .uploadText {
+    font-size: 1rem;
+  }
+
+  .uploadHint {
+    font-size: 0.8rem;
+  }
+
+  .desktopOnly {
+    display: none;
+  }
+
+  .mobileOnly {
+    display: inline;
+  }
+
+  .bookCard {
+    padding: 0.85rem 1rem;
+  }
+
+  .bookTitle {
+    font-size: 0.95rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 200px;
+  }
+
+  .bookMeta {
+    font-size: 0.8rem;
+  }
+
+  .bookActions {
+    flex-direction: row;
+  }
+
+  .deleteBtn,
+  .retryBtn {
+    width: 44px;
+    min-height: 44px;
+    font-size: 1.1rem;
+  }
+
+  .booksTitle {
+    font-size: 1.1rem;
+  }
+
+  .error {
+    font-size: 0.85rem;
+    padding: 0 0.5rem;
+  }
+
+  .footer {
+    padding-top: 1.5rem;
+    font-size: 0.8rem;
   }
 }
