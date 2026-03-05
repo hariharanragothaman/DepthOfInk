@@ -249,6 +249,66 @@ class TestConversationHistoryEndpoints:
         assert r.json()["status"] == "cleared"
 
 
+class TestExportConversation:
+    def test_export_json_empty(self, client, tmp_data_dir):
+        save_book("book_ex", "Export Test", [CharacterInfo(id="c1", name="Alice")])
+        r = client.get("/chat/export/book_ex/c1?format=json")
+        assert r.status_code == 200
+        data = json.loads(r.content)
+        assert data["book_title"] == "Export Test"
+        assert data["character_name"] == "Alice"
+        assert data["messages"] == []
+        assert "attachment" in r.headers.get("content-disposition", "")
+
+    def test_export_text_empty(self, client, tmp_data_dir):
+        save_book("book_ex2", "Text Export", [CharacterInfo(id="c1", name="Bob")])
+        r = client.get("/chat/export/book_ex2/c1?format=text")
+        assert r.status_code == 200
+        assert "text/plain" in r.headers.get("content-type", "")
+        text = r.content.decode()
+        assert "Text Export" in text
+        assert "Bob" in text
+
+    def test_export_json_with_messages(self, client, tmp_data_dir):
+        from app.services import conversation_store
+        save_book("book_ex3", "Story", [CharacterInfo(id="c1", name="Eve")])
+        conversation_store.save_messages("book_ex3", "c1", [
+            {"role": "user", "content": "Hello"},
+            {"role": "assistant", "content": "Hi there!"},
+        ])
+        r = client.get("/chat/export/book_ex3/c1?format=json")
+        assert r.status_code == 200
+        data = json.loads(r.content)
+        assert len(data["messages"]) == 2
+        assert data["messages"][0]["content"] == "Hello"
+
+    def test_export_text_with_messages(self, client, tmp_data_dir):
+        from app.services import conversation_store
+        save_book("book_ex4", "Story", [CharacterInfo(id="c1", name="Eve")])
+        conversation_store.save_messages("book_ex4", "c1", [
+            {"role": "user", "content": "Hello"},
+            {"role": "assistant", "content": "Greetings!"},
+        ])
+        r = client.get("/chat/export/book_ex4/c1?format=text")
+        text = r.content.decode()
+        assert "You: Hello" in text
+        assert "Eve: Greetings!" in text
+
+    def test_export_book_not_found(self, client, tmp_data_dir):
+        r = client.get("/chat/export/nonexist/c1?format=json")
+        assert r.status_code == 404
+
+    def test_export_character_not_found(self, client, tmp_data_dir):
+        save_book("book_ex5", "Test", [CharacterInfo(id="c1", name="A")])
+        r = client.get("/chat/export/book_ex5/c99?format=json")
+        assert r.status_code == 404
+
+    def test_export_invalid_format(self, client, tmp_data_dir):
+        save_book("book_ex6", "Test", [CharacterInfo(id="c1", name="A")])
+        r = client.get("/chat/export/book_ex6/c1?format=csv")
+        assert r.status_code == 422
+
+
 class TestGroupChatEndpoints:
     def test_group_stream_no_characters(self, client, tmp_data_dir):
         r = client.post(

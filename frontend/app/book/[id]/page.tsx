@@ -11,6 +11,7 @@ import {
   streamGroupChat,
   getConversationHistory,
   clearConversationHistory,
+  exportConversation,
   getRelationships,
   deleteBook,
   retryBook,
@@ -112,6 +113,15 @@ export default function BookPage() {
       setMessages([]);
     } catch {
       setError("Failed to clear memory");
+    }
+  }, [bookId, selectedId]);
+
+  const handleExport = useCallback(async (format: "json" | "text") => {
+    if (!bookId || !selectedId) return;
+    try {
+      await exportConversation(bookId, selectedId, format);
+    } catch {
+      setError("Failed to export conversation");
     }
   }, [bookId, selectedId]);
 
@@ -400,6 +410,24 @@ export default function BookPage() {
             >
               Clear memory
             </button>
+            <div className={styles.exportGroup}>
+              <button
+                type="button"
+                className={styles.exportBtn}
+                onClick={() => handleExport("json")}
+                title="Export as JSON"
+              >
+                Export JSON
+              </button>
+              <button
+                type="button"
+                className={styles.exportBtn}
+                onClick={() => handleExport("text")}
+                title="Export as text"
+              >
+                Export TXT
+              </button>
+            </div>
           </div>
         </div>
       )}

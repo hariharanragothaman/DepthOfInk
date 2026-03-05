@@ -1,11 +1,11 @@
 """Chat endpoints with streaming, citations, group chat, and memory."""
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 import json
 
 from app.config import settings
 from app.models.schemas import ChatMessage, ChatRequest, GroupChatRequest
-from app.services.book_store import get_character
+from app.services.book_store import get_character, load_book
 from app.services.chat_service import chat_stream
 from app.services import conversation_store
 
@@ -84,6 +84,68 @@ def clear_chat_history(request: Request, book_id: str, character_id: str):
     """Clear conversation memory for a character."""
     conversation_store.clear_conversation(book_id, character_id)
     return {"status": "cleared"}
+
+
+@router.get("/export/{book_id}/{character_id}")
+@_get_limiter().limit(settings.rate_limit_default)
+def export_conversation(
+    request: Request,
+    book_id: str,
+    character_id: str,
+    format: str = Query("json", pattern="^(json|text)$"),
+):
+    """Export conversation history as JSON or plain text."""
+    book = load_book(book_id)
+    if not book:
+        raise HTTPException(status_code=404, detail="Book not found")
+    character = get_character(book_id, character_id)
+    if not character:
+        raise HTTPException(status_code=404, detail="Character not found")
+
+    messages = conversation_store.load_messages(book_id, character_id)
+    summary = conversation_store.get_memory_summary(book_id, character_id)
+
+    if format == "text":
+        lines = [
+            f"DepthOfInk — Conversation Export",
+            f"Book: {book.title}",
+            f"Character: {character.name}",
+            "",
+        ]
+        if summary:
+            lines += [f"Memory Summary: {summary}", ""]
+        lines.append("--- Conversation ---")
+        lines.append("")
+        for m in messages:
+            role = m.get("role", "unknown")
+            label = "You" if role == "user" else character.name
+            content = m.get("content", "")
+            lines.append(f"{label}: {content}")
+            lines.append("")
+
+        from fastapi.responses import Response
+        filename = f"{book.title} - {character.name}.txt"
+        return Response(
+            content="\n".join(lines),
+            media_type="text/plain; charset=utf-8",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+
+    export_data = {
+        "book_id": book_id,
+        "book_title": book.title,
+        "character_id": character_id,
+        "character_name": character.name,
+        "memory_summary": summary or None,
+        "messages": messages,
+    }
+    filename = f"{book.title} - {character.name}.json"
+    from fastapi.responses import Response
+    return Response(
+        content=json.dumps(export_data, indent=2, ensure_ascii=False),
+        media_type="application/json",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 # --- Group Chat ---

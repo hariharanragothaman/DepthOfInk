@@ -138,6 +138,26 @@
   border-color: #c75c5c;
 }
 
+.exportGroup {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.exportBtn {
+  font-size: 0.8rem;
+  color: var(--ink-muted);
+  background: none;
+  border: 1px solid var(--ink-border);
+  border-radius: 4px;
+  padding: 0.2rem 0.6rem;
+  transition: border-color 0.2s, color 0.2s;
+}
+
+.exportBtn:hover {
+  color: var(--ink-accent);
+  border-color: var(--ink-accent-dim);
+}
+
 /* Chat area */
 .chat {
   flex: 1;
@@ -561,6 +581,16 @@
   .clearBtn {
     font-size: 0.75rem;
     min-height: 32px;
+  }
+
+  .exportGroup {
+    gap: 0.25rem;
+  }
+
+  .exportBtn {
+    font-size: 0.75rem;
+    min-height: 32px;
+    padding: 0.2rem 0.5rem;
   }
 
   .chat {

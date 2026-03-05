@@ -229,3 +229,26 @@ export async function clearConversationHistory(
   });
   if (!r.ok) throw new Error("Failed to clear history");
 }
+
+export async function exportConversation(
+  bookId: string,
+  characterId: string,
+  format: "json" | "text" = "json"
+): Promise<void> {
+  const r = await fetch(
+    `${API_BASE}/chat/export/${bookId}/${characterId}?format=${format}`
+  );
+  if (!r.ok) throw new Error("Export failed");
+  const blob = await r.blob();
+  const disposition = r.headers.get("Content-Disposition") || "";
+  const match = disposition.match(/filename="?(.+?)"?$/);
+  const filename = match?.[1] || `conversation.${format === "text" ? "txt" : "json"}`;
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
