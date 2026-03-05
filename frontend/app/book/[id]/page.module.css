@@ -95,6 +95,46 @@
   color: var(--ink-accent);
 }
 
+/* Group chat character picker */
+.groupPickerWrap {
+  margin-bottom: 0.5rem;
+}
+
+.groupPicker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+}
+
+.groupChip {
+  padding: 0.35rem 0.75rem;
+  background: var(--ink-surface);
+  border: 1px solid var(--ink-border);
+  border-radius: 20px;
+  color: var(--ink-text);
+  font-size: 0.85rem;
+  transition: border-color 0.2s, background 0.2s, opacity 0.2s;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.groupChip:hover:not(:disabled) {
+  border-color: var(--ink-accent-dim);
+}
+
+.groupChipActive {
+  border-color: var(--ink-accent);
+  background: rgba(201, 162, 39, 0.12);
+  color: var(--ink-accent);
+  font-weight: 500;
+}
+
+.groupChip:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 /* Character metadata */
 .charMeta {
   margin-bottom: 0.5rem;
@@ -518,6 +558,11 @@
     min-height: 36px;
     padding: 0.3rem 0.75rem;
   }
+
+  .groupChip {
+    padding: 0.35rem 0.65rem;
+    font-size: 0.8rem;
+  }
 }
 
 /* Mobile */
@@ -591,6 +636,16 @@
     font-size: 0.75rem;
     min-height: 32px;
     padding: 0.2rem 0.5rem;
+  }
+
+  .groupPicker {
+    gap: 0.3rem;
+  }
+
+  .groupChip {
+    padding: 0.3rem 0.6rem;
+    font-size: 0.75rem;
+    min-height: 32px;
   }
 
   .chat {

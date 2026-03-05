@@ -159,16 +159,20 @@ def _stream_group_chat(book_id: str, character_ids: list[str], message: str, his
         yield json.dumps({"type": "error", "content": str(e)}) + "\n"
 
 
+MAX_GROUP_PARTICIPANTS = 6
+
+
 @router.post("/group/stream")
 @_get_limiter().limit(settings.rate_limit_chat)
 def group_chat_stream_endpoint(request: Request, req: GroupChatRequest):
     """Stream group chat replies as NDJSON."""
     if not req.character_ids:
         raise HTTPException(status_code=400, detail="At least one character required")
+    char_ids = req.character_ids[:MAX_GROUP_PARTICIPANTS]
     return StreamingResponse(
         _stream_group_chat(
             req.book_id,
-            req.character_ids,
+            char_ids,
             req.message,
             [m.model_dump() for m in req.history],
         ),
@@ -183,6 +187,7 @@ def group_chat_message(request: Request, req: GroupChatRequest):
     from app.services.group_chat_service import group_chat
     if not req.character_ids:
         raise HTTPException(status_code=400, detail="At least one character required")
+    char_ids = req.character_ids[:MAX_GROUP_PARTICIPANTS]
     history = [m.model_dump() for m in req.history]
-    results = group_chat(req.book_id, req.character_ids, req.message, history)
+    results = group_chat(req.book_id, char_ids, req.message, history)
     return {"replies": results}

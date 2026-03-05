@@ -43,6 +43,7 @@ export default function BookPage() {
   const [error, setError] = useState<string | null>(null);
   const [loadingBook, setLoadingBook] = useState(true);
   const [groupMode, setGroupMode] = useState(false);
+  const [groupSelectedIds, setGroupSelectedIds] = useState<Set<string>>(new Set());
   const [showGraph, setShowGraph] = useState(false);
   const [relationships, setRelationships] = useState<CharacterRelationship[]>([]);
   const [hasMemory, setHasMemory] = useState(false);
@@ -104,6 +105,20 @@ export default function BookPage() {
     },
     [characters]
   );
+
+  const MAX_GROUP_PARTICIPANTS = 6;
+
+  const toggleGroupCharacter = useCallback((id: string) => {
+    setGroupSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else if (next.size < MAX_GROUP_PARTICIPANTS) {
+        next.add(id);
+      }
+      return next;
+    });
+  }, []);
 
   const handleClearMemory = useCallback(async () => {
     if (!bookId || !selectedId) return;
@@ -181,14 +196,16 @@ export default function BookPage() {
 
   const sendGroup = useCallback(async () => {
     const text = input.trim();
-    if (!text || !bookId || !characters.length || streaming) return;
+    if (!text || !bookId || !groupSelectedIds.size || streaming) return;
     setInput("");
     const userMsg: DisplayMessage = { role: "user", content: text };
     setMessages((prev) => [...prev, userMsg]);
     setStreaming(true);
     setError(null);
 
-    const charIds = characters.map((c) => c.id);
+    const charIds = characters
+      .filter((c) => groupSelectedIds.has(c.id))
+      .map((c) => c.id);
     let currentCharId = "";
     let currentCharName = "";
     let currentContent = "";
@@ -243,7 +260,7 @@ export default function BookPage() {
       setStreaming(false);
       inputRef.current?.focus();
     }
-  }, [bookId, characters, input, messages, streaming]);
+  }, [bookId, characters, groupSelectedIds, input, messages, streaming]);
 
   const send = groupMode ? sendGroup : sendSingle;
 
@@ -369,7 +386,14 @@ export default function BookPage() {
           <button
             type="button"
             className={`${styles.modeBtn} ${groupMode ? styles.modeBtnActive : ""}`}
-            onClick={() => { setGroupMode(true); setShowGraph(false); setMessages([]); }}
+            onClick={() => {
+              setGroupMode(true);
+              setShowGraph(false);
+              setMessages([]);
+              if (groupSelectedIds.size === 0) {
+                setGroupSelectedIds(new Set(characters.slice(0, 3).map((c) => c.id)));
+              }
+            }}
           >
             Group Chat
           </button>
@@ -433,9 +457,29 @@ export default function BookPage() {
       )}
 
       {groupMode && !showGraph && (
-        <p className={styles.characterDesc}>
-          All {characters.length} characters will respond to your messages in turn.
-        </p>
+        <div className={styles.groupPickerWrap}>
+          <p className={styles.characterDesc}>
+            Select up to {MAX_GROUP_PARTICIPANTS} characters ({groupSelectedIds.size} selected):
+          </p>
+          <div className={styles.groupPicker}>
+            {characters.map((c) => {
+              const isSelected = groupSelectedIds.has(c.id);
+              const atLimit = groupSelectedIds.size >= MAX_GROUP_PARTICIPANTS;
+              return (
+                <button
+                  key={c.id}
+                  type="button"
+                  className={`${styles.groupChip} ${isSelected ? styles.groupChipActive : ""}`}
+                  onClick={() => toggleGroupCharacter(c.id)}
+                  disabled={!isSelected && atLimit}
+                  title={!isSelected && atLimit ? `Max ${MAX_GROUP_PARTICIPANTS} characters` : c.name}
+                >
+                  {c.name}
+                </button>
+              );
+            })}
+          </div>
+        </div>
       )}
 
       {showGraph && (
@@ -476,7 +520,9 @@ export default function BookPage() {
               onKeyDown={onKeyDown}
               placeholder={
                 groupMode
-                  ? "Message all characters\u2026"
+                  ? groupSelectedIds.size === 0
+                    ? "Select characters above to start\u2026"
+                    : `Message ${groupSelectedIds.size} characters\u2026`
                   : `Message ${selected?.name ?? "character"}\u2026`
               }
               className={styles.input}
@@ -486,7 +532,7 @@ export default function BookPage() {
             <button
               type="button"
               onClick={send}
-              disabled={!input.trim() || streaming}
+              disabled={!input.trim() || streaming || (groupMode && groupSelectedIds.size === 0)}
               className={styles.sendBtn}
             >
               {streaming ? "..." : "Send"}
